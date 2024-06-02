@@ -1,0 +1,3 @@
+# BG3-Text-Chat
+Larian Studios didn't add in text chat support for Baldur's Gate 3. Or did they...  
+Deep in the data of the game, there exists leftover code from an unused text chat box. This mod aims to reimplement it into the game!
