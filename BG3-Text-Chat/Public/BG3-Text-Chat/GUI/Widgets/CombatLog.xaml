@@ -287,9 +287,35 @@
                         </ListBox>
 
                         <!-- =====  TODO Toggle Chat Holder Visibility ===== -->
-                        <Grid x:Name="ChatHolder" VerticalAlignment="Bottom" Visibility="Visible">
+                        <Grid x:Name="SavefileNameContainer" HorizontalAlignment="Center" Margin="0,0,0,0">
                             <Image x:Name="InputChat" Source="pack://application:,,,/GustavNoesisGUI;component/Assets/CombatLog/combatlog_input_d.png" Stretch="None" Margin="0,0,0,0"/>
+                            <ls:LSTextBox x:Name="InputChatText" Text="{Binding InputMsg}" MaxLength="40" TextImmediateSourceUpdate="True" Foreground="{StaticResource CombatLog.DefaultTextColor}" FontSize="{StaticResource ScaledDefaultFontSize}" TextAlignment="Left" Margin="0,0,0,0"/>
                         </Grid>
+                        <!--<Grid x:Name="ChatHolder" VerticalAlignment="Bottom" Visibility="Visible">
+                            <ControlTemplate>
+                                <Grid>
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
+                                        <Grid x:Name="SavefileNameContainer" HorizontalAlignment="Center" Margin="0,0,0,0">
+                                            <Image x:Name="InputChat" Source="pack://application:,,,/GustavNoesisGUI;component/Assets/CombatLog/combatlog_input_d.png" Stretch="None" Margin="0,0,0,0"/>
+                                            <ls:LSTextBox x:Name="InputChatText" Text="WILBUR" MaxLength="40" TextImmediateSourceUpdate="True" Foreground="{StaticResource CCTextPrimary}" FontSize="{StaticResource ScaledDefaultFontSize}" TextAlignment="Left" Margin="0,0,0,0"/>
+                                        </Grid>
+                                        <StackPanel x:Name="ButtonContainer" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,64,0,0">
+                                            <ls:LSButton x:Name="CloseBtn"
+                                            Content="{Binding Source='h2656214agb9f4g4a2fgaf07g3d646e405ef6', Converter={StaticResource TranslatedStringConverter}}"
+                                            SoundID="UI_Shared_Cancel"
+                                            Command="{Binding CustomEvent}" CommandParameter="{Binding Text, ElementName=InputChatText}"
+                                            BoundEvent="ToggleInGameMenu"
+                                            Style="{StaticResource BigBrownButtonStyle}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding ElementName=SavefileNameContainer, Path=IsMouseOver}" Value="True">
+                                        <Setter TargetName="textInputDashes" Property="Source" Value="pack://application:,,,/GustavNoesisGUI;component/Assets/CC/btn_namegroup_input_h.png"/>
+                                    </DataTrigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Grid>-->
                         <StackPanel>
                             <Image x:Name="BottomBorder" Panel.ZIndex="0" VerticalAlignment="Top" Source="pack://application:,,,/GustavNoesisGUI;component/Assets/CombatLog/combatlog_bar_bottom_rail.png" Stretch="None" IsHitTestVisible="False"/>
 
@@ -318,6 +344,10 @@
                                             <Image Style="{StaticResource TabDividerImageStyle}"/>
                                             <ls:LSButton  x:Name="tabAll" Template="{StaticResource TabButton_Active}" Command="{Binding IncreaseCombatLogSizeCommand}" Content="|All|">
                                             </ls:LSButton>
+                                            <ls:LSButton x:Name="PostBtn"
+                                            Content="Post"
+                                            Command="{Binding CustomEvent}" CommandParameter="{Binding Text, ElementName=InputChatText}"
+                                            Style="{StaticResource BigBrownButtonStyle}"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </StackPanel>
