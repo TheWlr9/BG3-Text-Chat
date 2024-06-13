@@ -1,8 +1,6 @@
 local MOD_UUID = "0fd00c41-58c8-4fe2-97cb-dc87a810ad94"
 
-Ext.IO.AddPathOverride("Public/Game/GUI/Widgets/CombatLog.xaml", "Public/BG3-Text-Chat/GUI/Widgets/CombatLog.xaml")
-
-Ext.Vars.RegisterModVariable(MOD_UUID, "MessageBuffer", {
+Ext.Vars.RegisterModVariable(MOD_UUID, "ChatLog", {
     Server = true,
     Client = true,
     WriteableOnServer = true,
@@ -13,5 +11,15 @@ Ext.Vars.RegisterModVariable(MOD_UUID, "MessageBuffer", {
     SyncOnTick = true,
     SyncOnWrite = false
 })
+Ext.Vars.RegisterModVariable(MOD_UUID, "LocalMessageBuffer", {
+    Server = false,
+    Client = true,
+    WriteableOnServer = false,
+    WriteableOnClient = true,
+    Persistent = false,
+    SyncToClient = false,
+    SyncToServer = false
+})
 
-Ext.Require("Client/Text-Chat_c.lua")
+local TC_Logic = Ext.Require("Client/Text-Chat_c.lua")
+local TC_GUI = Ext.Require("Client/Text-Chat_Window.lua")
