@@ -1,17 +1,15 @@
 local MOD_UUID = "0fd00c41-58c8-4fe2-97cb-dc87a810ad94"
 
-Ext.Vars.RegisterModVariable(MOD_UUID, "ChatLog", {
-    Server = true,
+Ext.Vars.RegisterModVariable(MOD_UUID, "InBuf", {
+    Server = false,
     Client = true,
-    WriteableOnServer = true,
+    WriteableOnServer = false,
     WriteableOnClient = true,
     Persistent = false,
-    SyncToClient = true,
-    SyncToServer = true,
-    SyncOnTick = true,
-    SyncOnWrite = false
+    SyncToClient = false,
+    SyncToServer = false,
 })
-Ext.Vars.RegisterModVariable(MOD_UUID, "LocalMessageBuffer", {
+Ext.Vars.RegisterModVariable(MOD_UUID, "OutBuf", {
     Server = false,
     Client = true,
     WriteableOnServer = false,
@@ -21,5 +19,5 @@ Ext.Vars.RegisterModVariable(MOD_UUID, "LocalMessageBuffer", {
     SyncToServer = false
 })
 
-local TC_Logic = Ext.Require("Client/Text-Chat_c.lua")
-local TC_GUI = Ext.Require("Client/Text-Chat_Window.lua")
+Ext.Require("Client/Text-Chat_c.lua")
+Ext.Require("Client/Text-Chat_Window.lua")
