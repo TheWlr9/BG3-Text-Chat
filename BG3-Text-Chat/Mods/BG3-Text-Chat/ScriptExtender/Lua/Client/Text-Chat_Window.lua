@@ -38,11 +38,13 @@ text_input.OnActivate = function() chat:SetStyle("Alpha", 0.9) end
 function TC_UpdateChat(new_message) text.Label = text.Label .. '\n' .. new_message end
 
 -- TODO:
---     - Button to collapse and open chat window
+--     - Button to collapse and open chat window or find ANY WAY to pass all click events
+--       through to the game underneath
 --     - Settings button which will enable moving and manually entering the dimenstions
 --       to store as mod variables or something. Persistent to save dimensions?
---     - Make text scroll always to the bottom upon new text message
+--     - Make text scroll always to the bottom upon new text message (I doubt it, but maybe \n\r?)
 --     - Make text messages wrap based on width
 --     - Somehow hide chat completely when not in gameplay?
+--     - Play sound effect upon new message?
 --     - Change alpha settings to auto-adjust based on focus?
 --     - MAYBE configure text size to user's configured text size in the settings?
