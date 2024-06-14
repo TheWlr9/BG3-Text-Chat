@@ -44,4 +44,5 @@ function TC_UpdateChat(new_message) text.Label = text.Label .. '\n' .. new_messa
 --     - Make text scroll always to the bottom upon new text message
 --     - Make text messages wrap based on width
 --     - Somehow hide chat completely when not in gameplay?
+--     - Change alpha settings to auto-adjust based on focus?
 --     - MAYBE configure text size to user's configured text size in the settings?
