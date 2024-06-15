@@ -1,4 +1,3 @@
-local MOD_UUID = "0fd00c41-58c8-4fe2-97cb-dc87a810ad94"
 local CHANNEL = "Text-Chat"
 
 local function on_user_connected(userID, userName, userSomethingElse)

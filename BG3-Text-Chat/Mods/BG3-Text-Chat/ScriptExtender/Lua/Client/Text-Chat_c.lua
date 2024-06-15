@@ -1,15 +1,11 @@
 
-local MOD_UUID = "0fd00c41-58c8-4fe2-97cb-dc87a810ad94"
 local CHANNEL = "Text-Chat"
-local REFRESH_RATE = 50
-
-local chat_width = 493 -- Not local
 
 function TC_SendMessage(message) if message ~= "" then Ext.Net.PostMessageToServer(CHANNEL, message) end end
 
 local function formatted_msg(msg)
     local pretty_msg = ""
-    local max_characters_per_line = chat_width / 7
+    local max_characters_per_line = PersistentVars.WindowWidth / 7
 
     local characters_in_current_line = 0
     for character in msg:gmatch('.') do
@@ -34,7 +30,7 @@ local function formatted_msg(msg)
 
                 prefix = prefix .. "-"
             end
-            pretty_msg = prefix .. "\n\t" .. suffix .. character
+            pretty_msg = prefix .. "\n\t\t" .. suffix .. character
 
             characters_in_current_line = 4 + TC_LenStringDisplay(suffix .. character)
         else pretty_msg = pretty_msg .. character
@@ -43,8 +39,4 @@ local function formatted_msg(msg)
     return pretty_msg
 end
 
---Ext.Events.KeyInput:Subscribe(function (event) if event.Event == "KeyUp" and event.Key == "RETURN" then TC_HandleEnterPressed() end end) -- Send message and clear out buffer.
---Ext.Events.NetMessage:Subscribe(function (event) if event.Channel == CHANNEL then Ext.Vars.GetModVariables(MOD_UUID).InBuf = event.Payload end end) -- Output all received Text-Chat messaages.
 Ext.Events.NetMessage:Subscribe(function (event) if event.Channel == CHANNEL then TC_UpdateChat(formatted_msg(event.Payload)) end end) -- Output all received Text-Chat messaages.
---local session_handle
---session_handle = Ext.Events.SessionLoaded:Subscribe(function (event) Ext.Timer.WaitFor(REFRESH_RATE, _refresh_chat, REFRESH_RATE) Ext.Events.SessionLoaded:Unsubscribe(session_handle) end)
