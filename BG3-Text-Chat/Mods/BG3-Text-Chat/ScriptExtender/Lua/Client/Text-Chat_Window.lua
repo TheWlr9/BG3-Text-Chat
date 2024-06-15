@@ -1,50 +1,74 @@
-local MOD_UUID = "0fd00c41-58c8-4fe2-97cb-dc87a810ad94"
+local ACTIVE_ALPHA = 0.9
+local INACTIVE_ALPHA = 0.5
 Ext.IMGUI.EnableDemo(true)
-local window_size = {493, 225}
-local _prev_rcvd_msg = ""
 
-local chat = Ext.IMGUI.NewWindow("Chat Box")
-chat.NoTitleBar = true
-chat.NoScrollbar = true
-chat:SetPos({1415, 375}) -- Needs string as 2nd param
-chat:SetBgAlpha(0.2)
-chat:SetStyle("Alpha", 0.2)
-chat.NoFocusOnAppearing = true
---chat:SetSize(window_size) -- Needs string as 2nd param
---chat.NoInputs = true
---chat.NoBackground = true
---chat.AlwaysAutoResize = true
+local chat_size = {493, 225}
+local chat_position = {1415, 375}
 
-local text_parent = chat:AddChildWindow("Text Holder")
+function TC_LenStringDisplay(str)
+    local count = 0
+
+    for character in str:gmatch('.') do count = count + (character == '\t' and 4 or 1) end
+    return count
+end
+
+local text_parent = Ext.IMGUI.NewWindow("Text Holder")
 text_parent.NoTitleBar = true
-text_parent.Size = {window_size[1] - 10, window_size[2] - 30}
---text_parent.NoInputs = true
+text_parent:SetPos(chat_position) -- Needs string as 2nd param
+text_parent:SetSize(chat_size) -- Needs string as 2nd param
+--text_parent:SetBgAlpha(INACTIVE_ALPHA)
+text_parent:SetStyle("Alpha", INACTIVE_ALPHA)
+text_parent.NoFocusOnAppearing = true
+text_parent.NoNav = true
 --text_parent.NoBringToFrontOnFocus = true
-text_parent.NoBackground = true
-text_parent.NoDecoration = true
+text_parent.NoMove = true
+text_parent.NoResize = true
+text_parent.NoInputs = true
+--text_parent.NoBackground = true
+--text_parent.AlwaysAutoResize = true
 
-local text = text_parent:AddText(_prev_rcvd_msg)
-text.SameLine = false
+local text = text_parent:AddText("~ Welcome to the chat ~")
 text:SetStyle("Alpha", 1)
 
-local text_input = chat:AddInputText("")
-text_input.AllowTabInput = true
-text_input.EscapeClearsAll = true
-text_input.ItemWidth = window_size[1] - 10
-text_input:SetStyle("Alpha", 0.7)
-text_input.OnDeactivate = function() TC_SendMessage(text_input.Text) text_input.Text = "" chat:SetStyle("Alpha", 0.2) end
-text_input.OnActivate = function() chat:SetStyle("Alpha", 0.9) end
+local input_parent = Ext.IMGUI.NewWindow("Input Holder")
+input_parent.NoTitleBar = true
+input_parent:SetPos({chat_position[1], chat_position[2] + chat_size[2]})
+input_parent:SetSize({chat_size[1], 35})
+input_parent:SetStyle("Alpha", INACTIVE_ALPHA)
+input_parent.NoMove = true
+--input_parent.NoScrollbar = false
+input_parent.NoResize = true
 
-function TC_UpdateChat(new_message) text.Label = text.Label .. '\n' .. new_message end
+local input = input_parent:AddInputText("")
+--input.NoHorizontalScroll = true
+input.AllowTabInput = true
+input.EscapeClearsAll = true
+input.ItemWidth = chat_size[1] - 10
+input.OnDeactivate = function()
+    TC_SendMessage(input.Text)
+    input.Text = ""
+
+    text_parent:SetStyle("Alpha", INACTIVE_ALPHA)
+    text_parent.NoInputs = true
+
+    input_parent:SetStyle("Alpha", INACTIVE_ALPHA)
+end
+input.OnActivate = function()
+    text_parent:SetStyle("Alpha", ACTIVE_ALPHA)
+    text_parent.NoInputs = false
+
+    input_parent:SetStyle("Alpha", ACTIVE_ALPHA)
+end
+
+function TC_UpdateChat(new_message)
+    text.Label = text.Label .. '\n' .. new_message
+    -- Needs to wait for 1 frame to properly get the updated content size
+    Ext.Timer.WaitFor(1, function() text_parent:SetScroll({0.0, 2000.0}) end)
+end
 
 -- TODO:
---     - Button to collapse and open chat window or find ANY WAY to pass all click events
---       through to the game underneath
 --     - Settings button which will enable moving and manually entering the dimenstions
 --       to store as mod variables or something. Persistent to save dimensions?
---     - Make text scroll always to the bottom upon new text message (I doubt it, but maybe \n\r?)
---     - Make text messages wrap based on width
---     - Somehow hide chat completely when not in gameplay?
+--     - Somehow hide text_parent completely when not in gameplay?
 --     - Play sound effect upon new message?
---     - Change alpha settings to auto-adjust based on focus?
 --     - MAYBE configure text size to user's configured text size in the settings?
