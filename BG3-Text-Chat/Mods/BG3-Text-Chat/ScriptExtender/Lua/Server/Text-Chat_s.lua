@@ -8,9 +8,7 @@ end
 
 local function received_message(event)
     if event.Channel == CHANNEL then
-        _D(event.UserID)
-        _D(event.Payload)
-        local display_name = Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[1].Name or Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[2].Name
+        local display_name = (Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[1].Name) or (#Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[2].Name) or GetUserName(event.UserID + 1)
         local formatted_msg = "<" .. display_name .. ">: " .. event.Payload
         Ext.Net.BroadcastMessage(CHANNEL, formatted_msg)
     end

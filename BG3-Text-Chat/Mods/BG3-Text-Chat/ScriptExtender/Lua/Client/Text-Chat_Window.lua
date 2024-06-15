@@ -248,4 +248,3 @@ Ext.Events.GameStateChanged:Subscribe(handle_game_state_changed)
 --     - Persistent to save dimensions?
 --     - Play sound effect upon new message?
 --     - MAYBE configure text size to user's configured text size in the settings?
---     - Change "Settings" button to an image of a gear
