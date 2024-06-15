@@ -3,7 +3,7 @@ PersistentVars = {}
 local ACTIVE_ALPHA = 0.9
 local INACTIVE_ALPHA = 0.5
 local INPUT_HEIGHT = 35 -- px
-local DEFAULT_SETTINGS_TEXT = "Move and resize this window to\nmove and resize the chat window.\nClick the \"Save\" when done!"
+local DEFAULT_SETTINGS_TEXT = "Click and drag me to move me around!\nTo resize me, click and drag on any of my edges!\nClick the \"Save\" when done!"
 Ext.IMGUI.EnableDemo(true) -- Remove before release
 
 local chat_size = {493, 225}
@@ -103,6 +103,12 @@ local function _toggle_settings()
         settings_button_toggled_holder.Visible = false
 
         settings_visible = false
+
+        _P("Updating persistents")
+        PersistentVars["WindowXPos"] = chat_position[1]
+        PersistentVars["WindowYPos"] = chat_position[2]
+        PersistentVars["WindowWidth"] = chat_size[1]
+        PersistentVars["WindowHeight"] = chat_size[2]
     else
         text_parent.Visible = false
         input_parent.Visible = false
@@ -196,12 +202,6 @@ local function _handle_window_dragging(event)
             is_moving = false
 
             _update_windows()
-
-            _P("Updating persistents")
-            PersistentVars["WindowXPos"] = chat_position[1]
-            PersistentVars["WindowYPos"] = chat_position[2]
-            PersistentVars["WindowWidth"] = chat_size[1]
-            PersistentVars["WindowHeight"] = chat_size[2]
         end
     end
 end
