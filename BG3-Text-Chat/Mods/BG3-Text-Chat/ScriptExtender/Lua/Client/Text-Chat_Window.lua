@@ -1,7 +1,7 @@
 local ACTIVE_ALPHA = 0.9
 local INACTIVE_ALPHA = 0.5
 local INPUT_HEIGHT = 35 -- px
-local DEFAULT_SETTINGS_TEXT = "Click and drag me to move me around!\nTo resize me, click and drag on any of my edges!\nClick the \"Save\" when done!"
+local DEFAULT_SETTINGS_TEXT = "Click and drag me with middle\nmouse button to move me around!\nTo resize me, click and\ndrag on any of my edges!\nClick the \"Save\" when done!"
 local DEFAULT_GREETING = "~ Welcome to the chat ~"
 
 local chat_size = {493, 225}
@@ -37,6 +37,7 @@ text_parent.NoMove = true
 text_parent.NoResize = true
 text_parent.NoInputs = true
 text_parent.Visible = false
+text_parent.NoScrollbar = true
 
 local text = text_parent:AddText(DEFAULT_GREETING)
 text:SetStyle("Alpha", 1)
@@ -60,12 +61,14 @@ input.OnDeactivate = function()
 
     text_parent:SetStyle("Alpha", INACTIVE_ALPHA)
     text_parent.NoInputs = true
+    text_parent.NoScrollbar = true
 
     input_parent:SetStyle("Alpha", INACTIVE_ALPHA)
 end
 input.OnActivate = function()
     text_parent:SetStyle("Alpha", ACTIVE_ALPHA)
     text_parent.NoInputs = false
+    text_parent.NoScrollbar = false
 
     input_parent:SetStyle("Alpha", ACTIVE_ALPHA)
 end
@@ -78,12 +81,13 @@ settings_parent.NoTitleBar = true
 settings_parent.NoCollapse = true
 settings_parent.NoInputs = true
 settings_parent.NoNav = true
+settings_parent.NoScrollbar = true
 
 local log = settings_parent:AddText(DEFAULT_SETTINGS_TEXT)
 
 local settings_button_toggled_holder = Ext.IMGUI.NewWindow("Settings Button Holder")
 settings_button_toggled_holder.SameLine = false
-settings_button_toggled_holder:SetPos({500, 500})
+settings_button_toggled_holder:SetPos({925, 800})
 settings_button_toggled_holder.ItemWidth = 78 -- 58
 settings_button_toggled_holder:SetSize({90, INPUT_HEIGHT * 2 - 7})
 settings_button_toggled_holder.NoTitleBar = true
@@ -213,12 +217,12 @@ local function _handle_window_dragging(event)
     end
 end
 
-Ext.Events.MouseButtonInput:Subscribe(function (event) if settings_visible and event.Button == 1 then _handle_window_dragging(event) end end)
+Ext.Events.MouseButtonInput:Subscribe(function (event) if settings_visible and event.Button == 2 then _handle_window_dragging(event) end end)
 
 function TC_UpdateChat(new_message)
     text.Label = text.Label .. '\n' .. new_message
     -- Needs to wait for 1 frame to properly get the updated content size
-    Ext.Timer.WaitFor(1, function() text_parent:SetScroll({0.0, 2000.0}) end)
+    Ext.Timer.WaitFor(1, function() text_parent:SetScroll({0.0, 99999999.0}) end)
 end
 
 local function _init_window_settings()
