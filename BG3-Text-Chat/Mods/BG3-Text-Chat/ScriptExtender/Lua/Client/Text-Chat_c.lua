@@ -1,11 +1,28 @@
-
 local CHANNEL = "Text-Chat"
+local WINDOW_SETTINGS_PATH = "Data/Text-Chat_Window-Settings.json"
+
+local cached_window_width
+
+function TC_DebugPrint(text) if TC_Debug then Ext.Utils.Print(text) end end
+
+function TC_SetDebug(value) TC_Debug = value end
+
+function TC_SaveWindowSettings(save_data)
+    Ext.IO.SaveFile(WINDOW_SETTINGS_PATH, Ext.Json.Stringify(save_data))
+    cached_window_width = save_data.WindowWidth
+end
+
+function TC_LoadWindowSettings()
+    local save_data = Ext.Json.Parse(Ext.IO.LoadFile(WINDOW_SETTINGS_PATH) or "{}")
+    cached_window_width = save_data == {} and 0 or save_data.WindowWidth
+    return save_data
+end
 
 function TC_SendMessage(message) if message ~= "" then Ext.Net.PostMessageToServer(CHANNEL, message) end end
 
 local function formatted_msg(msg)
     local pretty_msg = ""
-    local max_characters_per_line = PersistentVars.WindowWidth / 7
+    local max_characters_per_line = cached_window_width / 7
 
     local characters_in_current_line = 0
     for character in msg:gmatch('.') do

@@ -1,10 +1,8 @@
-PersistentVars = {}
-
 local ACTIVE_ALPHA = 0.9
 local INACTIVE_ALPHA = 0.5
 local INPUT_HEIGHT = 35 -- px
 local DEFAULT_SETTINGS_TEXT = "Click and drag me to move me around!\nTo resize me, click and drag on any of my edges!\nClick the \"Save\" when done!"
-Ext.IMGUI.EnableDemo(true) -- Remove before release
+local DEFAULT_GREETING = "~ Welcome to the chat ~"
 
 local chat_size = {493, 225}
 local chat_position = {1415, 375}
@@ -40,7 +38,7 @@ text_parent.NoResize = true
 text_parent.NoInputs = true
 text_parent.Visible = false
 
-local text = text_parent:AddText("~ Welcome to the chat ~")
+local text = text_parent:AddText(DEFAULT_GREETING)
 text:SetStyle("Alpha", 1)
 
 local input_parent = Ext.IMGUI.NewWindow("Input Holder")
@@ -86,13 +84,19 @@ local log = settings_parent:AddText(DEFAULT_SETTINGS_TEXT)
 local settings_button_toggled_holder = Ext.IMGUI.NewWindow("Settings Button Holder")
 settings_button_toggled_holder.SameLine = false
 settings_button_toggled_holder:SetPos({500, 500})
-settings_button_toggled_holder.ItemWidth = 58
-settings_button_toggled_holder:SetSize({70, INPUT_HEIGHT})
+settings_button_toggled_holder.ItemWidth = 78 -- 58
+settings_button_toggled_holder:SetSize({90, INPUT_HEIGHT * 2 - 7})
 settings_button_toggled_holder.NoTitleBar = true
 settings_button_toggled_holder.Visible = false
 settings_button_toggled_holder.NoMove = true
 settings_button_toggled_holder.NoResize = true
 settings_button_toggled_holder.NoScrollbar = true
+
+local clear_button = settings_button_toggled_holder:AddButton("Clear Chat")
+clear_button.SameLine = false
+clear_button.ItemWidth = 78
+clear_button.Size = {78, 25.3}
+clear_button.OnClick = function() text.Label = DEFAULT_GREETING end
 
 local function _toggle_settings()
     if settings_visible then
@@ -104,11 +108,14 @@ local function _toggle_settings()
 
         settings_visible = false
 
-        _P("Updating persistents")
-        PersistentVars["WindowXPos"] = chat_position[1]
-        PersistentVars["WindowYPos"] = chat_position[2]
-        PersistentVars["WindowWidth"] = chat_size[1]
-        PersistentVars["WindowHeight"] = chat_size[2]
+        TC_DebugPrint("Updating settings")
+        local window_save_table = {
+            WindowXPos = chat_position[1],
+            WindowYPos = chat_position[2],
+            WindowWidth = chat_size[1],
+            WindowHeight = chat_size[2]
+        }
+        TC_SaveWindowSettings(window_save_table)
     else
         text_parent.Visible = false
         input_parent.Visible = false
@@ -123,8 +130,8 @@ end
 local settings_button_toggled = settings_button_toggled_holder:AddButton("Save")
 settings_button_toggled.SameLine = false
 settings_button_toggled.PositionOffset = {0, 0}
-settings_button_toggled.ItemWidth = 58
-settings_button_toggled.Size = {58, 25.3}
+settings_button_toggled.ItemWidth = 78
+settings_button_toggled.Size = {78, 25.3}
 settings_button_toggled.OnClick = _toggle_settings
 
 local settings_button_untoggled = input_parent:AddButton("Settings")
@@ -135,7 +142,7 @@ settings_button_untoggled.Size = {58, 25.3}
 settings_button_untoggled.OnClick = _toggle_settings
 
 local function _update_windows()
-    _P("Updating window dimensions")
+    TC_DebugPrint("Updating window dimensions")
     text_parent.NoMove = false
     text_parent.NoResize = false
     text_parent:SetPos(chat_position)
@@ -215,17 +222,24 @@ function TC_UpdateChat(new_message)
 end
 
 local function _init_window_settings()
-    _D(PersistentVars)
-    if not PersistentVars["WindowXPos"] then
-        _P("Initializing persistents to defaults")
-        PersistentVars["WindowXPos"] = 1415
-        PersistentVars["WindowYPos"] = 375
-        PersistentVars["WindowWidth"] = 493
-        PersistentVars["WindowHeight"] = 225
+    local settings = TC_LoadWindowSettings()
+    if not settings or settings == {} or not settings.WindowXPos then
+        TC_DebugPrint("Initializing settings to defaults")
+        settings.WindowXPos = 1415
+        settings.WindowYPos = 375
+        settings.WindowWidth = 493
+        settings.WindowHeight = 225
+        local window_save_table = {
+            WindowXPos = settings.WindowXPos,
+            WindowYPos = settings.WindowYPos,
+            WindowWidth = settings.WindowWidth,
+            WindowHeight = settings.WindowHeight
+        }
+        TC_SaveWindowSettings(window_save_table)
     end
 
-    chat_position = {PersistentVars["WindowXPos"], PersistentVars["WindowYPos"]}
-    chat_size = {PersistentVars["WindowWidth"], PersistentVars["WindowHeight"]}
+    chat_position = {settings.WindowXPos, settings.WindowYPos}
+    chat_size = {settings.WindowWidth, settings.WindowHeight}
 
     _update_windows()
     text_parent.Visible = true
@@ -233,7 +247,9 @@ local function _init_window_settings()
 end
 
 local function handle_game_state_changed(event)
-    if event.ToState == "Disconnect" then
+    if event.ToState == "PrepareRunning" then
+        _init_window_settings()
+    elseif event.ToState == "UnloadLevel" then
         text_parent.Visible = false
         input_parent.Visible = false
         settings_parent.Visible = false
@@ -241,10 +257,8 @@ local function handle_game_state_changed(event)
     end
 end
 
-Ext.Events.SessionLoaded:Subscribe(function (event) _init_window_settings() end)
 Ext.Events.GameStateChanged:Subscribe(handle_game_state_changed)
 
 -- TODO:
---     - Persistent to save dimensions?
---     - Play sound effect upon new message?
 --     - MAYBE configure text size to user's configured text size in the settings?
+--       I don't think its possible.
