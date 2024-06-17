@@ -1,5 +1,6 @@
 local CHANNEL = "Text-Chat"
 local MSG_RECEIVED_EVENT = "TC_MessageReceived"
+local MSG_BUFFER_HANDLE = "h7961f8f8g2753g4885gb843gbad96a0098d7"
 
 local function on_user_connected(userID, userName, userSomethingElse)
     Ext.Net.BroadcastMessage(CHANNEL, "~ " .. userName .. " has connected ~")
@@ -11,9 +12,15 @@ end
 
 local function received_message(event)
     if event.Channel == CHANNEL then
-        local display_name = (Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[1].Name) or (#Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(Osi.GetCurrentCharacter(event.UserID + 1)).ServerDisplayNameList.Names[2].Name) or GetUserName(event.UserID + 1)
+        local talking_character = Osi.GetCurrentCharacter(event.UserID + 1)
+        local display_name = (Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name) or (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) or GetUserName(event.UserID + 1)
         local formatted_msg = "<" .. display_name .. ">: " .. event.Payload
         Ext.Net.BroadcastMessage(CHANNEL, formatted_msg)
+
+        if (Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name) or (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) then
+            Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload)
+            Osi.ApplyStatus(talking_character, "TEXT_MESSAGE", 0)
+        end
 
         IteratePlayerCharacters(MSG_RECEIVED_EVENT, "")
     end

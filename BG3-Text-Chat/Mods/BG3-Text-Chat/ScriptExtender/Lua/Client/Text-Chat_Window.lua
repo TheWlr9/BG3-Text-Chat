@@ -88,7 +88,7 @@ local log = settings_parent:AddText(DEFAULT_SETTINGS_TEXT)
 local settings_button_toggled_holder = Ext.IMGUI.NewWindow("Settings Button Holder")
 settings_button_toggled_holder.SameLine = false
 settings_button_toggled_holder:SetPos({925, 800})
-settings_button_toggled_holder.ItemWidth = 78 -- 58
+settings_button_toggled_holder.ItemWidth = 242
 settings_button_toggled_holder:SetSize({90, INPUT_HEIGHT * 2 - 7})
 settings_button_toggled_holder.NoTitleBar = true
 settings_button_toggled_holder.Visible = false
@@ -137,6 +137,11 @@ settings_button_toggled.PositionOffset = {0, 0}
 settings_button_toggled.ItemWidth = 78
 settings_button_toggled.Size = {78, 25.3}
 settings_button_toggled.OnClick = _toggle_settings
+
+--TC_ShouldDisplayOverheadText = true
+--local display_overhead_text_toggle = settings_button_toggled_holder:AddCheckbox("Display text overhead character", TC_ShouldDisplayOverheadText)
+--display_overhead_text_toggle.Checked = TC_ShouldDisplayOverheadText
+--display_overhead_text_toggle.OnChange = function() TC_ShouldDisplayOverheadText = not TC_ShouldDisplayOverheadText _P(TC_ShouldDisplayOverheadText and 1 or 0) end
 
 local settings_button_untoggled = input_parent:AddButton("Settings")
 settings_button_untoggled.SameLine = false
