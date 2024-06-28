@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<save>
+   <version major="4" minor="0" revision="9" build="328" /> 
+   <region id="TextureAtlasInfo"> 
+       <node id="root">
+           <children>
+                <node id="TextureAtlasIconSize">
+                   <attribute id="Height" type="int64" value="64"/>
+                   <attribute id="Width" type="int64" value="64"/>
+               </node>
+               <node id="TextureAtlasPath">
+                   <attribute id="Path" type="LSString" value="Assets/Textures/Icons/Text-Chat_gear-icon.dds"/>
+                   <attribute id="UUID" type="FixedString" value="9735d896-1c99-412f-88ce-1bc3c129db18"/>
+               </node>
+               <node id="TextureAtlasTextureSize">
+                   <attribute id="Height" type="int64" value="64"/>
+                   <attribute id="Width" type="int64" value="64"/>
+               </node>
+               <node id="IconUV">
+                   <attribute id="MapKey" type="FixedString" value="Text-Chat_Item_gear-icon"/> 1
+                   <attribute id="U1" type="float" value="0.0"/> Left side of icon
+                   <attribute id="U2" type="float" value="1.0"/> Right side of icon
+                   <attribute id="V1" type="float" value="0.0"/> Top side of icon
+                   <attribute id="V2" type="float" value="1.0"/> Bottom side of icon
+               </node> 
+           </children>
+       </node>
+   </region>
+</save>

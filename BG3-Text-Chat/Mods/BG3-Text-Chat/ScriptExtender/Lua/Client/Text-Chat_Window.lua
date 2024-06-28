@@ -6,6 +6,7 @@ local DEFAULT_GREETING = "~ Welcome to the chat ~"
 
 local chat_size = {493, 225}
 local chat_position = {1415, 375}
+local cached_game_window_width = 1920
 local settings_visible = false
 
 -- Vars for window repositioning and resizing
@@ -54,7 +55,7 @@ input_parent.Visible = false
 local input = input_parent:AddInputText("")
 input.AllowTabInput = true
 input.EscapeClearsAll = true
-input.ItemWidth = chat_size[1] - 73
+input.ItemWidth = chat_size[1] - 39
 input.OnDeactivate = function()
     TC_SendMessage(input.Text)
     input.Text = ""
@@ -87,19 +88,56 @@ local log = settings_parent:AddText(DEFAULT_SETTINGS_TEXT)
 
 local settings_button_toggled_holder = Ext.IMGUI.NewWindow("Settings Button Holder")
 settings_button_toggled_holder.SameLine = false
-settings_button_toggled_holder:SetPos({925, 800})
+settings_button_toggled_holder:SetPos({870, 650})
 settings_button_toggled_holder.ItemWidth = 242
-settings_button_toggled_holder:SetSize({90, INPUT_HEIGHT * 2 - 7})
+settings_button_toggled_holder:SetSize({190, INPUT_HEIGHT * 8 - 7})
 settings_button_toggled_holder.NoTitleBar = true
 settings_button_toggled_holder.Visible = false
 settings_button_toggled_holder.NoMove = true
 settings_button_toggled_holder.NoResize = true
 settings_button_toggled_holder.NoScrollbar = true
 
+local game_display_size_1920_button
+local game_display_size_2560_button
+local game_display_size_3440_button
+local game_display_size_3840_button
+game_display_size_1920_button = settings_button_toggled_holder:AddRadioButton("1920x1080", true)
+game_display_size_1920_button.OnActivate = function()
+    game_display_size_2560_button.Active = false
+    game_display_size_3440_button.Active = false
+    game_display_size_3840_button.Active = false
+    cached_game_window_width = 1920
+end
+game_display_size_1920_button.OnChange = function() if not game_display_size_1920_button.Active then game_display_size_1920_button.Active = true end end
+game_display_size_2560_button = settings_button_toggled_holder:AddRadioButton("2560x1440", false)
+game_display_size_2560_button.OnActivate = function()
+    game_display_size_1920_button.Active = false
+    game_display_size_3440_button.Active = false
+    game_display_size_3840_button.Active = false
+    cached_game_window_width = 2560
+end
+game_display_size_2560_button.OnChange = function() if not game_display_size_2560_button.Active then game_display_size_2560_button.Active = true end end
+game_display_size_3440_button = settings_button_toggled_holder:AddRadioButton("3440x1440", false)
+game_display_size_3440_button.OnActivate = function()
+    game_display_size_1920_button.Active = false
+    game_display_size_2560_button.Active = false
+    game_display_size_3840_button.Active = false
+    cached_game_window_width = 3440
+end
+game_display_size_3440_button.OnChange = function() if not game_display_size_3440_button.Active then game_display_size_3440_button.Active = true end end
+game_display_size_3840_button = settings_button_toggled_holder:AddRadioButton("3840x2160", false)
+game_display_size_3840_button.OnActivate = function()
+    game_display_size_1920_button.Active = false
+    game_display_size_2560_button.Active = false
+    game_display_size_3440_button.Active = false
+    cached_game_window_width = 3840
+end
+game_display_size_3840_button.OnChange = function() if not game_display_size_3840_button.Active then game_display_size_3840_button.Active = true end end
+
 local clear_button = settings_button_toggled_holder:AddButton("Clear Chat")
 clear_button.SameLine = false
-clear_button.ItemWidth = 78
-clear_button.Size = {78, 25.3}
+clear_button.ItemWidth = 178
+clear_button.Size = {178, 25.3}
 clear_button.OnClick = function() text.Label = DEFAULT_GREETING end
 
 local function _toggle_settings()
@@ -117,7 +155,8 @@ local function _toggle_settings()
             WindowXPos = chat_position[1],
             WindowYPos = chat_position[2],
             WindowWidth = chat_size[1],
-            WindowHeight = chat_size[2]
+            WindowHeight = chat_size[2],
+            GameWindowWidth = cached_game_window_width
         }
         TC_SaveWindowSettings(window_save_table)
     else
@@ -134,8 +173,8 @@ end
 local settings_button_toggled = settings_button_toggled_holder:AddButton("Save")
 settings_button_toggled.SameLine = false
 settings_button_toggled.PositionOffset = {0, 0}
-settings_button_toggled.ItemWidth = 78
-settings_button_toggled.Size = {78, 25.3}
+settings_button_toggled.ItemWidth = 178
+settings_button_toggled.Size = {178, 25.3}
 settings_button_toggled.OnClick = _toggle_settings
 
 --TC_ShouldDisplayOverheadText = true
@@ -143,11 +182,10 @@ settings_button_toggled.OnClick = _toggle_settings
 --display_overhead_text_toggle.Checked = TC_ShouldDisplayOverheadText
 --display_overhead_text_toggle.OnChange = function() TC_ShouldDisplayOverheadText = not TC_ShouldDisplayOverheadText _P(TC_ShouldDisplayOverheadText and 1 or 0) end
 
-local settings_button_untoggled = input_parent:AddButton("Settings")
+local settings_button_untoggled = input_parent:AddImageButton("Settings Button Untoggled", "9735d896-1c99-412f-88ce-1bc3c129db18", {21, 21})
 settings_button_untoggled.SameLine = false
-settings_button_untoggled.PositionOffset = {chat_size[1] - 70, -27}
-settings_button_untoggled.ItemWidth = 58
-settings_button_untoggled.Size = {58, 25.3}
+settings_button_untoggled.PositionOffset = {chat_size[1] - 36, -27}
+settings_button_untoggled.ItemWidth = 36
 settings_button_untoggled.OnClick = _toggle_settings
 
 local function _update_windows()
@@ -164,10 +202,14 @@ local function _update_windows()
     input_parent:SetSize({chat_size[1], INPUT_HEIGHT})
     input_parent.NoMove = true
     input_parent.NoResize = true
-    input.ItemWidth = chat_size[1] - 73
+    input.ItemWidth = chat_size[1] - 39
     settings_parent:SetPos(chat_position)
     settings_parent:SetSize({chat_size[1], chat_size[2] + INPUT_HEIGHT})
-    settings_button_untoggled.PositionOffset = {chat_size[1] - 70, -27}
+    settings_button_untoggled.PositionOffset = {chat_size[1] - 36, -27}
+    game_display_size_1920_button.Active = cached_game_window_width == 1920
+    game_display_size_2560_button.Active = cached_game_window_width == 2560
+    game_display_size_3440_button.Active = cached_game_window_width == 3440
+    game_display_size_3840_button.Active = cached_game_window_width == 3840
     log.Label = DEFAULT_SETTINGS_TEXT
 end
 
@@ -238,17 +280,20 @@ local function _init_window_settings()
         settings.WindowYPos = 375
         settings.WindowWidth = 493
         settings.WindowHeight = 225
+        settings.GameWindowWidth = cached_game_window_width
         local window_save_table = {
             WindowXPos = settings.WindowXPos,
             WindowYPos = settings.WindowYPos,
             WindowWidth = settings.WindowWidth,
-            WindowHeight = settings.WindowHeight
+            WindowHeight = settings.WindowHeight,
+            GameWindowWidth = settings.GameWindowWidth
         }
         TC_SaveWindowSettings(window_save_table)
     end
 
     chat_position = {settings.WindowXPos, settings.WindowYPos}
     chat_size = {settings.WindowWidth, settings.WindowHeight}
+    cached_game_window_width = settings.GameWindowWidth
 
     _update_windows()
     text_parent.Visible = true
