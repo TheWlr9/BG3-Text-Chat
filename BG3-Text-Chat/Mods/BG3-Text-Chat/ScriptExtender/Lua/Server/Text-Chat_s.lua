@@ -1,4 +1,4 @@
-local CHANNEL = "Text-Chat"
+CHANNEL = "Text-Chat"
 local MSG_RECEIVED_EVENT = "TC_MessageReceived"
 local MSG_BUFFER_HANDLE = "h7961f8f8g2753g4885gb843gbad96a0098d7"
 

@@ -1,4 +1,4 @@
-local CHANNEL = "Text-Chat"
+CHANNEL = "Text-Chat"
 local WINDOW_SETTINGS_PATH = "Data/Text-Chat_Window-Settings.json"
 
 local cached_window_width
