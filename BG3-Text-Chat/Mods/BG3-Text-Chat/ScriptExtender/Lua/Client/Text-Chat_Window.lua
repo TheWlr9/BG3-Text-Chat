@@ -280,7 +280,7 @@ local function _init_window_settings()
         settings.WindowYPos = 375
         settings.WindowWidth = 493
         settings.WindowHeight = 225
-        settings.GameWindowWidth = cached_game_window_width
+        settings.GameWindowWidth = 1920
         local window_save_table = {
             WindowXPos = settings.WindowXPos,
             WindowYPos = settings.WindowYPos,

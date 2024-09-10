@@ -18,8 +18,9 @@ local function received_message(event)
         Ext.Net.BroadcastMessage(CHANNEL, formatted_msg)
 
         if (Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name) or (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) then
+            Ext.Net.BroadcastMessage(CHANNEL, "[OHT] " .. event.Payload)
             Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload)
-            Osi.ApplyStatus(talking_character, "TEXT_MESSAGE", 0)
+            Ext.Timer.WaitForRealtime(200, function () Osi.ApplyStatus(talking_character, "TEXT_MESSAGE", 0) end)
         end
 
         IteratePlayerCharacters(MSG_RECEIVED_EVENT, "")

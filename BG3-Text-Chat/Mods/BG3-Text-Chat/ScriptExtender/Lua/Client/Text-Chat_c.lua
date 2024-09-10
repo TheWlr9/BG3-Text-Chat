@@ -1,5 +1,6 @@
 CHANNEL = "Text-Chat"
 local WINDOW_SETTINGS_PATH = "Data/Text-Chat_Window-Settings.json"
+local MSG_BUFFER_HANDLE = "h7961f8f8g2753g4885gb843gbad96a0098d7"
 
 local cached_window_width
 local cached_game_window_width
@@ -59,4 +60,12 @@ local function formatted_msg(msg)
     return pretty_msg
 end
 
-Ext.Events.NetMessage:Subscribe(function (event) if event.Channel == CHANNEL then TC_UpdateChat(formatted_msg(event.Payload)) end end) -- Output all received Text-Chat messaages.
+Ext.Events.NetMessage:Subscribe(function (event)
+    if event.Channel == CHANNEL then
+        if event.Payload:sub(1, 5) == "[OHT]" then -- Overhead text update command
+            Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload:sub(6, event.Payload:len()))
+        else
+            TC_UpdateChat(formatted_msg(event.Payload)) -- Output all received Text-Chat messages.
+        end
+    end
+end)
