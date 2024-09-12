@@ -63,7 +63,7 @@ end
 Ext.Events.NetMessage:Subscribe(function (event)
     if event.Channel == CHANNEL then
         if event.Payload:sub(1, 5) == "[OHT]" then -- Overhead text update command
-            Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload:sub(6, event.Payload:len()))
+            Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload:sub(7, event.Payload:len()))
         else
             TC_UpdateChat(formatted_msg(event.Payload)) -- Output all received Text-Chat messages.
         end

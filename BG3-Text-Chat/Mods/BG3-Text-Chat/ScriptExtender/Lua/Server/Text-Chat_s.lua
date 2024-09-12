@@ -13,13 +13,14 @@ end
 local function received_message(event)
     if event.Channel == CHANNEL then
         local talking_character = Osi.GetCurrentCharacter(event.UserID + 1)
-        local display_name = (Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name) or (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) or GetUserName(event.UserID + 1)
+        local display_name = (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) or
+            (Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle) ~= "Player" and Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle)) or
+            GetUserName(event.UserID + 1)
         local formatted_msg = "<" .. display_name .. ">: " .. event.Payload
         Ext.Net.BroadcastMessage(CHANNEL, formatted_msg)
-
-        if (Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name ~= "" and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].Name) or (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) then
+        if (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) or
+        Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle) then
             Ext.Net.BroadcastMessage(CHANNEL, "[OHT] " .. event.Payload)
-            Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload)
             Ext.Timer.WaitForRealtime(200, function () Osi.ApplyStatus(talking_character, "TEXT_MESSAGE", 0) end)
         end
 
