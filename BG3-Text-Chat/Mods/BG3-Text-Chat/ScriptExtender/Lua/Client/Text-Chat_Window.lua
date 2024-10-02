@@ -51,6 +51,7 @@ input_parent:SetStyle("Alpha", INACTIVE_ALPHA)
 input_parent.NoMove = true
 input_parent.NoResize = true
 input_parent.Visible = false
+input_parent.NoScrollbar = true
 
 local input = input_parent:AddInputText("")
 input.AllowTabInput = true
