@@ -14,7 +14,7 @@ local function received_message(event)
     if event.Channel == CHANNEL then
         local talking_character = Osi.GetCurrentCharacter(event.UserID + 1)
         local display_name = (#Ext.Entity.Get(talking_character).ServerDisplayNameList.Names >= 2 and Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[2].Name) or
-            (Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle) and Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle) ~= "Player" and Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle) ~= "Dummy") or
+            (Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle) ~= "Player" and Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle) ~= "Dummy" and Ext.Loca.GetTranslatedString(Ext.Entity.Get(talking_character).ServerDisplayNameList.Names[1].NameKey.Handle.Handle)) or
             GetUserName(event.UserID + 1)
         local formatted_msg = "<" .. display_name .. ">: " .. event.Payload
         Ext.Net.BroadcastMessage(CHANNEL, formatted_msg)
