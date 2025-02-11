@@ -313,14 +313,14 @@ local function handle_game_state_changed(event)
 end
 
 local function handle_key_input(event)
-    if event.Key == "F10" and event.Pressed then
+    if event.Key == "F10" and event.Pressed and not event.Repeat then
         text_parent.Visible = not text_parent.Visible
         input_parent.Visible = not input_parent.Visible
     end
 end
 
 Ext.Events.GameStateChanged:Subscribe(handle_game_state_changed)
-Ext.Events.EclLuaKeyInput:Subscribe(handle_key_input)
+Ext.Events.KeyInput:Subscribe(handle_key_input)
 
 -- TODO:
 --     - MAYBE configure text size to user's configured text size in the settings?
