@@ -49,10 +49,10 @@ end
 
 local function _get_root_width_fallback()
     if Ext.UI and Ext.UI.GetRoot then
-        local ok, root = pcall(function() return Ext.UI.GetRoot() end)
-        if ok and root then
-            local ok2, props = pcall(function() return root:GetAllProperties(root) end)
-            if ok2 and props and props.ActualWidth then
+        local gotUiRootObject, uiRootObject = pcall(function() return Ext.UI.GetRoot() end)
+        if gotUiRootObject and uiRootObject then
+            local gotProps, props = pcall(function() return uiRootObject:GetAllProperties(uiRootObject) end)
+            if gotProps and props and props.ActualWidth then
                 return tonumber(props.ActualWidth)
             end
         end
@@ -70,6 +70,8 @@ local function _now_ms()
     return 0
 end
 
+-- Formats a session-relative timestamp (T+MM:SS or T+H:MM:SS)
+-- based on the time since the current game session started.
 local function _format_session_timestamp()
     local ms = _now_ms()
     if session_start_ms == nil then
@@ -125,8 +127,8 @@ function TC_LoadWindowSettings()
 
     local rootW = _get_root_width_fallback()
 
-    cached_window_width = _safe_number(save_data.WindowWidth, 493)
-    cached_game_window_width = _safe_number(save_data.GameWindowWidth, rootW or 1920)
+    cached_window_width = _safe_number(save_data.WindowWidth, 493) 
+    cached_game_window_width = _safe_number(save_data.GameWindowWidth, rootW or 1920) -- Don't default to 0 because we might get a DBZ error later.
 
     cached_show_timestamps = _safe_bool(save_data.ShowTimestamps, false)
     cached_font_scale = _safe_number(save_data.FontScale, 1.0)
@@ -148,6 +150,13 @@ function TC_SendMessage(message)
     end
 end
 
+-- Wraps a chat message based on:
+--  - Current chat window width
+--  - Game window width (for DPI scaling)
+--  - Font scale
+--
+-- Attempts to wrap at word boundaries and falls back to
+-- forced hyphenation for very long words.
 local function _wrap_message(msg)
     local w = _safe_number(cached_window_width, 493)
     local gw = _safe_number(cached_game_window_width, _get_root_width_fallback() or 1920)
@@ -210,10 +219,10 @@ end
 
 Ext.Events.NetMessage:Subscribe(function (event)
     if event.Channel == CHANNEL then
-        if event.Payload:sub(1, 5) == "[OHT]" then
+        if event.Payload:sub(1, 5) == "[OHT]" then -- Overhead text update command
             Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload:sub(7, event.Payload:len()))
         else
-            TC_UpdateChat(TC_FormatChatMessage(event.Payload))
+            TC_UpdateChat(TC_FormatChatMessage(event.Payload)) -- Output all received Text-Chat messages.
         end
     end
 end)

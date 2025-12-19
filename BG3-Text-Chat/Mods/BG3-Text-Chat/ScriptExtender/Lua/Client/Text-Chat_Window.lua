@@ -1,11 +1,16 @@
+-- Ensure this file only runs on the client
 if not Ext.IsClient() then
     return
 end
 
+-- Prevent double-loading the chat window (hot reload safety)
 if _G.__TEXTCHAT_WINDOW_LOADED then
     return
 end
 
+-- Wrap the entire UI initialization in pcall so that any IMGUI or
+-- UI root access failures do not break the mod loader.
+-- Errors are logged and the chat window is skipped gracefully.
 local ok_init, err = pcall(function()
     local CONFIG = {
         MinChatW = 360,
@@ -94,30 +99,35 @@ local ok_init, err = pcall(function()
     local _current_alpha
     local _center_settings_panel
 
+    -- Attempts to determine whether the game UI root is visible.
+    -- Uses multiple fallbacks because different game states expose
+    -- different properties.
     _get_root_visible = function()
-        local ok, root = pcall(function()
+        local gotRootObject, rootObject = pcall(function()
             return Ext.UI.GetRoot and Ext.UI.GetRoot() or nil
         end)
-        if not ok or not root then return nil end
+        if not gotRootObject or not rootObject then return nil end
 
-        local ok1, isVisible = pcall(function() return root:GetProperty("IsVisible") end)
-        if ok1 and isVisible ~= nil then
-            return (isVisible == true)
+        local gotIsVisibleProp, isVisible = pcall(function() return rootObject:GetProperty("IsVisible") end)
+        if gotIsVisibleProp and isVisible ~= nil then
+            return isVisible
         end
 
-        local ok2, visibility = pcall(function() return root:GetProperty("Visibility") end)
-        if ok2 and visibility ~= nil then
+        local gotVisibilityProp, visibility = pcall(function() return rootObject:GetProperty("Visibility") end)
+        if gotVisibilityProp and visibility ~= nil then
             return (tostring(visibility) == "Visible")
         end
 
-        local ok3, opacity = pcall(function() return root:GetProperty(".VisualOpacity") end)
-        if ok3 and opacity ~= nil then
+        local gotOpacityProp, opacity = pcall(function() return rootObject:GetProperty(".VisualOpacity") end)
+        if gotOpacityProp and opacity ~= nil then
             return (tonumber(opacity) or 1.0) > 0.01
         end
 
         return nil
     end
 
+    -- Keeps our chat visibility in sync with the game's UI visibility
+    -- (e.g. when the user hides the HUD).
     _sync_ui_hidden_from_root = function()
         local vis = _get_root_visible()
         if vis == nil then return end
@@ -129,16 +139,17 @@ local ok_init, err = pcall(function()
         end
     end
 
+    -- Gets the size of the game root window.
     _get_root_size = function()
-        local ok, root = pcall(function()
+        local gotRootObject, rootObject = pcall(function()
             return Ext.UI.GetRoot and Ext.UI.GetRoot() or nil
         end)
-        if not ok or not root then return nil, nil end
+        if not gotRootObject or not rootObject then return nil, nil end
 
-        local ok2, props = pcall(function()
-            return root:GetAllProperties(root)
+        local gotProps, props = pcall(function()
+            return rootObject:GetAllProperties(rootObject)
         end)
-        if not ok2 or not props then return nil, nil end
+        if not gotProps or not props then return nil, nil end
 
         return tonumber(props.ActualWidth), tonumber(props.ActualHeight)
     end
@@ -165,16 +176,17 @@ local ok_init, err = pcall(function()
         chat_position[2] = math.max(min_y, math.min(chat_position[2], max_y))
     end
 
+    -- Polls the current mouse position in screen coordinates.
     _poll_mouse_pos = function()
-        local ok, ph = pcall(function()
+        local gotPickingHelper, pickingHelper = pcall(function()
             return Ext.UI.GetPickingHelper(1)
         end)
-        if not ok or not ph then return nil, nil end
+        if not gotPickingHelper or not pickingHelper then return nil, nil end
 
-        local ok2, pos = pcall(function() return ph.WindowCursorPos end)
-        if not ok2 or type(pos) ~= "table" then return nil, nil end
+        local gotCursorPos, cursorPos = pcall(function() return pickingHelper.WindowCursorPos end)
+        if not gotCursorPos or type(cursorPos) ~= "table" then return nil, nil end
 
-        local x, y = pos[1], pos[2]
+        local x, y = cursorPos[1], cursorPos[2]
         if type(x) == "number" and type(y) == "number" then
             return x, y
         end
@@ -233,6 +245,8 @@ local ok_init, err = pcall(function()
     input.AllowTabInput = true
     input.EscapeClearsAll = true
 
+    -- Focuses the input box for typing using a hack to reset its label and reactivate it.
+    -- Required because IMGUI input widgets cannot be reliably re-focused once deactivated.
 	local function _focus_input()
 		input_active = true
 		_apply_clickthrough() 
@@ -381,6 +395,10 @@ local ok_init, err = pcall(function()
         _apply_clickthrough()
     end
 
+    -- Centralized input routing policy:
+    --  - Chat ignores input when hidden or HUD is hidden
+    --  - Settings panel blocks chat interaction
+    --  - Input box only captures keys when active
     _apply_clickthrough = function()
         local show_chat = in_game and chat_enabled and (not game_ui_hidden)
         if not show_chat then
@@ -492,17 +510,16 @@ local ok_init, err = pcall(function()
 
             _center_settings_panel(settings_panel)
         else
-            local aa = tonumber(active_alpha_input.Text)
-            local ia = tonumber(inactive_alpha_input.Text)
+            local activeAlpha = tonumber(active_alpha_input.Text)
+            local inactiveAlpha = tonumber(inactive_alpha_input.Text)
 
-            if aa then active_alpha = math.max(0.1, math.min(aa, 1.0)) end
-            if ia then inactive_alpha = math.max(0.1, math.min(ia, 1.0)) end
-
+            if activeAlpha then active_alpha = math.max(0.1, math.min(activeAlpha, 1.0)) end
+            if inactiveAlpha then inactive_alpha = math.max(0.1, math.min(inactiveAlpha, 1.0)) end
             font_scale = _clamp_font_scale(font_scale_input.Text)
 
-            local fk = tostring(focus_key_input.Text or ""):upper()
-            if fk ~= "" then
-                focus_key = fk
+            local focusKey = tostring(focus_key_input.Text or ""):upper()
+            if focusKey ~= "" then
+                focus_key = focusKey
             end
 
             _save_window_settings()
@@ -541,6 +558,10 @@ local ok_init, err = pcall(function()
             false, false, false, false, false
     end
 
+    -- Drag lifecycle:
+    --  1) _begin_drag() determines mode and captures starting state
+    --  2) _apply_drag() applies deltas every frame
+    --  3) _end_drag() commits, clamps, and persists the result
     _begin_drag = function()
         if not (in_game and settings_visible and move_mode) then return end
         local mx, my = _poll_mouse_pos()
@@ -565,6 +586,10 @@ local ok_init, err = pcall(function()
         _save_window_settings()
     end
 
+    -- Determines which drag mode should be active based on cursor position:
+    --  - Move (center)
+    --  - Resize (left / right / top / bottom edges)
+    -- Returns true if a valid drag mode was detected.
     _recompute_drag_mode = function(mx, my)
         _clear_drag_flags()
 
@@ -596,6 +621,8 @@ local ok_init, err = pcall(function()
         return is_left_resizing or is_top_resizing or is_right_resizing or is_bottom_resizing or is_moving
     end
 
+    -- Applies movement or resizing based on the active drag mode.
+    -- Mouse delta is calculated relative to drag start.
     _apply_drag = function(mx, my)
         if not drag_active then return end
 
@@ -662,6 +689,7 @@ local ok_init, err = pcall(function()
 
     function TC_UpdateChat(new_message)
         text.Label = text.Label .. "\n" .. new_message
+        -- Needs to wait for 1 frame to properly get the updated content size
         Ext.Timer.WaitFor(1, function()
             text_parent:SetScroll({0.0, 99999999.0})
         end)
@@ -711,6 +739,8 @@ local ok_init, err = pcall(function()
         _apply_visibility()
     end
 
+    -- Handles entering and leaving a game session.
+    -- Resets transient UI state and persists window settings on unload.
     Ext.Events.GameStateChanged:Subscribe(function(event)
         if event.ToState == "PrepareRunning" then
             if TC_ResetSessionClock then
@@ -740,3 +770,10 @@ if not ok_init then
 end
 
 _G.__TEXTCHAT_WINDOW_LOADED = true
+
+-- TODO:
+--     - MAYBE configure text size to user's configured text size in the settings?
+--       I don't think its possible.
+--     - Let chat fade out after some time of inactivity now that focus input works?
+--     - Implement /me command for emotes?
+--     - Allow changing the drag button?
