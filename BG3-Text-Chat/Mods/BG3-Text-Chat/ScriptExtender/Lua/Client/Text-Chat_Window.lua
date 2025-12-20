@@ -715,10 +715,10 @@ local ok_init, err = pcall(function()
         inactive_alpha = tonumber(settings.InactiveAlpha) or CONFIG.DefaultInactiveAlpha
         drag_button = tonumber(settings.DragButton) or drag_button
 
-        show_timestamps = (settings.ShowTimestamps == true)
+        show_timestamps = settings.ShowTimestamps
         font_scale = _clamp_font_scale(settings.FontScale)
 
-        enter_opens_chat = (settings.EnterOpensChat ~= false)
+        enter_opens_chat = not settings.EnterOpensChat
         focus_key = tostring(settings.FocusKey or CONFIG.DefaultFocusKey)
 
         active_alpha_input.Text = tostring(active_alpha)
@@ -770,10 +770,3 @@ if not ok_init then
 end
 
 _G.__TEXTCHAT_WINDOW_LOADED = true
-
--- TODO:
---     - MAYBE configure text size to user's configured text size in the settings?
---       I don't think its possible.
---     - Let chat fade out after some time of inactivity now that focus input works?
---     - Implement /me command for emotes?
---     - Allow changing the drag button?

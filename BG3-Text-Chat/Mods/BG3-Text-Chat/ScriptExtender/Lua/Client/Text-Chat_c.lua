@@ -92,7 +92,7 @@ local function _format_session_timestamp()
 end
 
 function TC_SaveWindowSettings(save_data)
-    local normalized = {
+    local cached_settings = {
         WindowXPos = _safe_number(save_data.WindowXPos, 0),
         WindowYPos = _safe_number(save_data.WindowYPos, 0),
         WindowWidth = _safe_number(save_data.WindowWidth, 493),
@@ -110,12 +110,12 @@ function TC_SaveWindowSettings(save_data)
         FocusKey = _safe_string(save_data.FocusKey, "RETURN"),
     }
 
-    Ext.IO.SaveFile(WINDOW_SETTINGS_PATH, Ext.Json.Stringify(normalized))
+    Ext.IO.SaveFile(WINDOW_SETTINGS_PATH, Ext.Json.Stringify(cached_settings))
 
-    cached_window_width = normalized.WindowWidth
-    cached_game_window_width = normalized.GameWindowWidth
-    cached_show_timestamps = normalized.ShowTimestamps
-    cached_font_scale = normalized.FontScale
+    cached_window_width = cached_settings.WindowWidth
+    cached_game_window_width = cached_settings.GameWindowWidth
+    cached_show_timestamps = cached_settings.ShowTimestamps
+    cached_font_scale = cached_settings.FontScale
 end
 
 function TC_LoadWindowSettings()
