@@ -718,8 +718,8 @@ local ok_init, err = pcall(function()
         show_timestamps = settings.ShowTimestamps
         font_scale = _clamp_font_scale(settings.FontScale)
 
-        enter_opens_chat = not settings.EnterOpensChat
-        focus_key = tostring(settings.FocusKey or CONFIG.DefaultFocusKey)
+        enter_opens_chat = settings.EnterOpensChat
+        focus_key = tostring(settings.FocusKey or CONFIG.DefaultFocusKey):upper()
 
         active_alpha_input.Text = tostring(active_alpha)
         inactive_alpha_input.Text = tostring(inactive_alpha)
