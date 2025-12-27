@@ -743,10 +743,6 @@ local ok_init, err = pcall(function()
     -- Resets transient UI state and persists window settings on unload.
     Ext.Events.GameStateChanged:Subscribe(function(event)
         if event.ToState == "PrepareRunning" then
-            if TC_ResetSessionClock then
-                TC_ResetSessionClock()
-            end
-
             in_game = true
             _init_window_settings()
         elseif event.ToState == "UnloadLevel" then
