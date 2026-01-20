@@ -11,6 +11,8 @@ local cached_show_timestamps = false
 local cached_font_scale = 1.0
 local cached_clock_offset_minutes = 0
 
+local chat_history = "" -- Contains the entire session's chat history.
+
 function TC_DebugPrint(text) if TC_Debug then Ext.Utils.Print(text) end end
 function TC_SetDebug(value) TC_Debug = value end
 
@@ -215,12 +217,20 @@ function TC_FormatChatMessage(payload)
     return prefix .. _wrap_message(payload)
 end
 
+function TC_GenerateLogFile()
+    _P("test")
+    local log_file_path = "Data/Logs/Text-Chat_Log_" .. Ext.Timer.ClockTime():gsub("[ %.:]", "-") .. ".log"
+    Ext.IO.SaveFile(log_file_path, chat_history)
+end
+
 Ext.Events.NetMessage:Subscribe(function (event)
     if event.Channel == CHANNEL then
         if event.Payload:sub(1, 5) == "[OHT]" then -- Overhead text update command
             Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload:sub(7, event.Payload:len()))
         else
-            TC_UpdateChat(TC_FormatChatMessage(event.Payload)) -- Output all received Text-Chat messages.
+            local formatted_msg = TC_FormatChatMessage(event.Payload)
+            TC_UpdateChat(formatted_msg) -- Output all received Text-Chat messages.
+            chat_history = chat_history .. '\r\n' .. formatted_msg
         end
     end
 end)

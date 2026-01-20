@@ -41,8 +41,6 @@ local ok_init, err = pcall(function()
 
         DefaultEnterOpensChat = true,
         DefaultFocusKey = "RETURN",
-
-        DefaultDebugKeys = false,
     }
 
     local settings_loaded = false
@@ -60,8 +58,6 @@ local ok_init, err = pcall(function()
 
     local enter_opens_chat = CONFIG.DefaultEnterOpensChat
     local focus_key = CONFIG.DefaultFocusKey
-
-    local debug_keys = CONFIG.DefaultDebugKeys
 
     local game_ui_hidden = false
     local last_root_visible = nil
@@ -335,6 +331,11 @@ local ok_init, err = pcall(function()
         timestamps_button.Label = show_timestamps and "Timestamps: ON" or "Timestamps: OFF"
     end
 
+    local generate_log_file_button = settings_panel:AddButton("Generate log file")
+    generate_log_file_button.ItemWidth = 280
+    generate_log_file_button.Size = {280, 28}
+    generate_log_file_button.OnClick = TC_GenerateLogFile
+
     settings_panel:AddText("Wrap Scale (0.75 - 2.0)")
     local font_scale_input = settings_panel:AddInputText(tostring(font_scale))
 
@@ -355,14 +356,6 @@ local ok_init, err = pcall(function()
     reset_focus_key_button.OnClick = function()
         focus_key = CONFIG.DefaultFocusKey
         focus_key_input.Text = focus_key
-    end
-
-    local debug_keys_button = settings_panel:AddButton("Debug Key Presses: OFF")
-    debug_keys_button.ItemWidth = 280
-    debug_keys_button.Size = {280, 28}
-    debug_keys_button.OnClick = function()
-        debug_keys = not debug_keys
-        debug_keys_button.Label = debug_keys and "Debug Key Presses: ON" or "Debug Key Presses: OFF"
     end
 
     settings_panel:AddText("Active Opacity (0.1 - 1.0)")
@@ -492,7 +485,6 @@ local ok_init, err = pcall(function()
 
         timestamps_button.Label = show_timestamps and "Timestamps: ON" or "Timestamps: OFF"
         focus_toggle_button.Label = enter_opens_chat and "Focus Key Opens Chat: ON" or "Focus Key Opens Chat: OFF"
-        debug_keys_button.Label = debug_keys and "Debug Key Presses: ON" or "Debug Key Presses: OFF"
     end
 
     _toggle_settings = function()
@@ -506,7 +498,6 @@ local ok_init, err = pcall(function()
 
             timestamps_button.Label = show_timestamps and "Timestamps: ON" or "Timestamps: OFF"
             focus_toggle_button.Label = enter_opens_chat and "Focus Key Opens Chat: ON" or "Focus Key Opens Chat: OFF"
-            debug_keys_button.Label = debug_keys and "Debug Key Presses: ON" or "Debug Key Presses: OFF"
 
             _center_settings_panel(settings_panel)
         else
@@ -672,10 +663,6 @@ local ok_init, err = pcall(function()
     end)
 
     Ext.Events.KeyInput:Subscribe(function(event)
-        if debug_keys and event.Pressed and not event.Repeat then
-            Ext.Utils.Print("[TextChat] KeyInput: " .. tostring(event.Key))
-        end
-
         if not enter_opens_chat then return end
         if not in_game or not chat_enabled or game_ui_hidden then return end
         if settings_visible or drag_active then return end
@@ -683,7 +670,6 @@ local ok_init, err = pcall(function()
         if not event.Pressed then return end
         if tostring(event.Key) ~= tostring(focus_key) then return end
 
-        Ext.Utils.Print("[TextChat] Focus key pressed -> focusing input")
         _focus_input()
     end)
 
@@ -733,7 +719,6 @@ local ok_init, err = pcall(function()
         focus_toggle_button.Label = enter_opens_chat and "Focus Key Opens Chat: ON" or "Focus Key Opens Chat: OFF"
         font_scale_input.Text = tostring(font_scale)
         focus_key_input.Text = tostring(focus_key)
-        debug_keys_button.Label = debug_keys and "Debug Key Presses: ON" or "Debug Key Presses: OFF"
 
         _update_windows()
         _apply_visibility()
