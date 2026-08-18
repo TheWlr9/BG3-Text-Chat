@@ -1,5 +1,5 @@
 {
-    "RequiredVersion": 16,
+    "RequiredVersion": 32,
     "ModTable": "BG3-Text-Chat",
     "FeatureFlags": ["Lua"]
 }

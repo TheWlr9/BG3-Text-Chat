@@ -1,28 +1,11 @@
 CHANNEL = "Text-Chat"
 local WINDOW_SETTINGS_PATH = "Data/Text-Chat_Window-Settings.json"
-local MSG_BUFFER_HANDLE = "h7961f8f8g2753g4885gb843gbad96a0098d7"
 
-local cached_window_width = 0
--- Reference width used for wrap/DPI scaling math (not the player's resolution).
+MSG_BUFFER_HANDLE = "h7961f8f8g2753g4885gb843gbad96a0098d7"
+
+local CFG = Ext.Require("Shared/Text-Chat_Config.lua")
+
 local BASELINE_GAME_WINDOW_WIDTH = 1920
-local cached_game_window_width = BASELINE_GAME_WINDOW_WIDTH
-
-local cached_show_timestamps = false
-local cached_font_scale = 1.0
-local cached_clock_offset_minutes = 0
-
-local chat_history = "" -- Contains the entire session's chat history.
-
-function TC_DebugPrint(text) if TC_Debug then Ext.Utils.Print(text) end end
-function TC_SetDebug(value) TC_Debug = value end
-
-function TC_LenStringDisplay(str)
-    local count = 0
-    for character in str:gmatch('.') do
-        count = count + (character == '\t' and 4 or 1)
-    end
-    return count
-end
 
 local function _safe_number(v, default)
     v = tonumber(v)
@@ -46,6 +29,11 @@ local function _safe_string(v, default)
     return default
 end
 
+local function _safe_chat_format(v, default)
+    if v == "classic" or v == "modern" or v == "discord" or v == "roleplayer" then return v end
+    return default
+end
+
 local function _get_root_width_fallback()
     if Ext.UI and Ext.UI.GetRoot then
         local gotUiRootObject, uiRootObject = pcall(function() return Ext.UI.GetRoot() end)
@@ -59,178 +47,125 @@ local function _get_root_width_fallback()
     return nil
 end
 
--- Formats an absolute clock timestamp using Ext.Timer.ClockEpoch().
--- Note: BG3SE's Lua sandbox may not expose the standard `os` library,
--- so we format time via arithmetic and apply a user-configurable offset.
 local function _format_clock_timestamp()
     local epoch = tonumber(Ext.Timer.ClockEpoch())
-    if not epoch then
-        return ""
-    end
-
-    -- Defensive: handle ms epochs if the API ever returns them.
-    if epoch > 1000000000000 then
-        epoch = epoch / 1000
-    end
+    if not epoch then return "" end
+    if epoch > 1000000000000 then epoch = epoch / 1000 end
 
     local totalMinutesUtc = math.floor(epoch / 60)
-    local offsetMinutes = _safe_number(cached_clock_offset_minutes, 0)
     local minutesInDay = 24 * 60
 
-    local localMinutes = (totalMinutesUtc + offsetMinutes) % minutesInDay
-    if localMinutes < 0 then
-        localMinutes = localMinutes + minutesInDay
-    end
+    local localMinutes = totalMinutesUtc % minutesInDay
+    if localMinutes < 0 then localMinutes = localMinutes + minutesInDay end
 
     local hh = math.floor(localMinutes / 60)
     local mm = localMinutes % 60
-    return string.format("[%02d:%02d] ", hh, mm)
+    return string.format("%02d:%02d", hh, mm)
 end
+TC_FormatClockTimestamp = _format_clock_timestamp
 
 function TC_SaveWindowSettings(save_data)
     local cached_settings = {
-        WindowXPos = _safe_number(save_data.WindowXPos, 0),
-        WindowYPos = _safe_number(save_data.WindowYPos, 0),
-        WindowWidth = _safe_number(save_data.WindowWidth, 493),
-        WindowHeight = _safe_number(save_data.WindowHeight, 225),
+        WindowXPos = _safe_number(save_data.WindowXPos, CFG.DefaultWindowXPos),
+        WindowYPos = _safe_number(save_data.WindowYPos, CFG.DefaultWindowYPos),
+        WindowWidth = _safe_number(save_data.WindowWidth, CFG.DefaultWindowWidth),
+        WindowHeight = _safe_number(save_data.WindowHeight, CFG.DefaultWindowHeight),
         GameWindowWidth = _safe_number(save_data.GameWindowWidth, _get_root_width_fallback() or BASELINE_GAME_WINDOW_WIDTH),
 
-        ActiveAlpha = _safe_number(save_data.ActiveAlpha, 0.9),
-        InactiveAlpha = _safe_number(save_data.InactiveAlpha, 0.5),
-        DragButton = _safe_number(save_data.DragButton, 2),
+        ActiveAlpha = _safe_number(save_data.ActiveAlpha, CFG.DefaultActiveAlpha),
+        InactiveAlpha = _safe_number(save_data.InactiveAlpha, CFG.DefaultInactiveAlpha),
 
-        ShowTimestamps = _safe_bool(save_data.ShowTimestamps, false),
-        FontScale = _safe_number(save_data.FontScale, 1.0),
-        ClockOffsetMinutes = _safe_number(save_data.ClockOffsetMinutes, cached_clock_offset_minutes or 0),
+        ShowTimestamps = _safe_bool(save_data.ShowTimestamps, CFG.DefaultShowTimestamps),
+        ShowHintMessage = _safe_bool(save_data.ShowHintMessage, CFG.DefaultShowHintMessage),
+        ChatFormat = _safe_chat_format(save_data.ChatFormat, CFG.DefaultChatFormat),
 
-        EnterOpensChat = _safe_bool(save_data.EnterOpensChat, true),
-        FocusKey = _safe_string(save_data.FocusKey, "RETURN"),
+        OpenKey = _safe_string(save_data.OpenKey, CFG.DefaultOpenKey),
+
+        AutoHideEnabled = _safe_bool(save_data.AutoHideEnabled, CFG.DefaultAutoHideEnabled),
+        AutoHideDelaySeconds = _safe_number(save_data.AutoHideDelaySeconds, CFG.AutoHideDelaySeconds),
+
+        TypingNotificationsEnabled = _safe_bool(save_data.TypingNotificationsEnabled, CFG.DefaultTypingNotificationsEnabled),
+        OverheadTextEnabled = _safe_bool(save_data.OverheadTextEnabled, CFG.DefaultOverheadTextEnabled),
     }
 
     Ext.IO.SaveFile(WINDOW_SETTINGS_PATH, Ext.Json.Stringify(cached_settings))
-
-    cached_window_width = cached_settings.WindowWidth
-    cached_game_window_width = cached_settings.GameWindowWidth
-    cached_show_timestamps = cached_settings.ShowTimestamps
-    cached_font_scale = cached_settings.FontScale
-    cached_clock_offset_minutes = cached_settings.ClockOffsetMinutes
 end
 
 function TC_LoadWindowSettings()
     local raw = Ext.IO.LoadFile(WINDOW_SETTINGS_PATH)
     local save_data = Ext.Json.Parse(raw or "{}")
-    if type(save_data) ~= "table" then
-        save_data = {}
-    end
+    if type(save_data) ~= "table" then save_data = {} end
 
     local rootW = _get_root_width_fallback()
 
-    cached_window_width = _safe_number(save_data.WindowWidth, 493)
-    cached_game_window_width = _safe_number(save_data.GameWindowWidth, rootW or BASELINE_GAME_WINDOW_WIDTH) -- Don't default to 0 because we might get a DBZ error later.
+    save_data.WindowXPos = _safe_number(save_data.WindowXPos, CFG.DefaultWindowXPos)
+    save_data.WindowYPos = _safe_number(save_data.WindowYPos, CFG.DefaultWindowYPos)
+    save_data.WindowWidth = _safe_number(save_data.WindowWidth, CFG.DefaultWindowWidth)
+    save_data.WindowHeight = _safe_number(save_data.WindowHeight, CFG.DefaultWindowHeight)
+    save_data.GameWindowWidth = _safe_number(save_data.GameWindowWidth, rootW or BASELINE_GAME_WINDOW_WIDTH)
 
-    cached_show_timestamps = _safe_bool(save_data.ShowTimestamps, false)
-    cached_font_scale = _safe_number(save_data.FontScale, 1.0)
-    cached_clock_offset_minutes = _safe_number(save_data.ClockOffsetMinutes, 0)
+    save_data.ActiveAlpha = _safe_number(save_data.ActiveAlpha, CFG.DefaultActiveAlpha)
+    save_data.InactiveAlpha = _safe_number(save_data.InactiveAlpha, CFG.DefaultInactiveAlpha)
 
-    save_data.WindowWidth = cached_window_width
-    save_data.GameWindowWidth = cached_game_window_width
-    save_data.ShowTimestamps = cached_show_timestamps
-    save_data.FontScale = cached_font_scale
-    save_data.ClockOffsetMinutes = cached_clock_offset_minutes
+    save_data.ShowTimestamps = _safe_bool(save_data.ShowTimestamps, CFG.DefaultShowTimestamps)
+    save_data.ShowHintMessage = _safe_bool(save_data.ShowHintMessage, CFG.DefaultShowHintMessage)
+    save_data.ChatFormat = _safe_chat_format(save_data.ChatFormat, CFG.DefaultChatFormat)
 
-    save_data.EnterOpensChat = _safe_bool(save_data.EnterOpensChat, true)
-    save_data.FocusKey = _safe_string(save_data.FocusKey, "RETURN")
+    save_data.OpenKey = _safe_string(save_data.OpenKey, CFG.DefaultOpenKey)
+
+    save_data.AutoHideEnabled = _safe_bool(save_data.AutoHideEnabled, CFG.DefaultAutoHideEnabled)
+    save_data.AutoHideDelaySeconds = _safe_number(save_data.AutoHideDelaySeconds, CFG.AutoHideDelaySeconds)
+
+    save_data.TypingNotificationsEnabled = _safe_bool(save_data.TypingNotificationsEnabled, CFG.DefaultTypingNotificationsEnabled)
+    save_data.OverheadTextEnabled = _safe_bool(save_data.OverheadTextEnabled, CFG.DefaultOverheadTextEnabled)
 
     return save_data
 end
 
+local function _post(tbl)
+    local ok, encoded = pcall(function() return Ext.Json.Stringify(tbl) end)
+    if not ok or not encoded then return end
+    Ext.Net.PostMessageToServer(CHANNEL, encoded)
+end
+
 function TC_SendMessage(message)
-    if message ~= "" then
-        Ext.Net.PostMessageToServer(CHANNEL, message)
-    end
+    if message == nil then return end
+    if message == "" then return end
+    _post({ t = "msg", body = message })
 end
 
--- Wraps a chat message based on:
---  - Current chat window width
---  - Game window width (for DPI scaling)
---  - Font scale
---
--- Attempts to wrap at word boundaries and falls back to
--- forced hyphenation for very long words.
-local function _wrap_message(msg)
-    local w = _safe_number(cached_window_width, 493)
-    local gw = _safe_number(cached_game_window_width, _get_root_width_fallback() or 1920)
-    local fontScale = _safe_number(cached_font_scale, 1.0)
-    if fontScale < 0.75 then fontScale = 0.75 end
-    if fontScale > 2.0 then fontScale = 2.0 end
+function TC_SendEdit(id, message)
+    if id == nil or message == nil then return end
+    if message == "" then return end
+    _post({ t = "edit", id = id, body = message })
+end
 
-    local pretty_msg = ""
-    local max_characters_per_line = (w / (7 * (gw / 1920))) / fontScale
-    if max_characters_per_line < 10 then
-        max_characters_per_line = 10
-    end
+function TC_SendTyping(isTyping)
+    _post({ t = "typing", on = isTyping and true or false })
+end
 
-    local characters_in_current_line = 0
-    for character in msg:gmatch('.') do
-        characters_in_current_line = characters_in_current_line + TC_LenStringDisplay(character)
+function TC_ParseEmoteSegments(text)
+    text = text or ""
+    local segments = {}
+    local pos = 1
+    local len = #text
 
-        if characters_in_current_line >= max_characters_per_line then
-            local curr_character_line_index = pretty_msg:len()
-            local prefix, suffix
-
-            while curr_character_line_index > 0
-                and pretty_msg:sub(curr_character_line_index, curr_character_line_index) ~= ' '
-                and pretty_msg:sub(curr_character_line_index, curr_character_line_index) ~= '\t'
-            do
-                curr_character_line_index = curr_character_line_index - 1
-            end
-
-            local i = curr_character_line_index - 1
-            while i > 0 and pretty_msg:sub(i, i) ~= ' ' do
-                i = i - 1
-            end
-
-            if i > 0 then
-                prefix = pretty_msg:sub(0, curr_character_line_index)
-                suffix = pretty_msg:sub(curr_character_line_index)
-            else
-                prefix = pretty_msg:sub(0, math.max(pretty_msg:len() - 1, 0))
-                suffix = pretty_msg:sub(math.max(pretty_msg:len() - 1, 0))
-                prefix = prefix .. "-"
-            end
-
-            pretty_msg = prefix .. "\n\t\t" .. suffix .. character
-            characters_in_current_line = 4 + TC_LenStringDisplay(suffix .. character)
-        else
-            pretty_msg = pretty_msg .. character
+    while pos <= len do
+        local s, e, inner = text:find("%*([^*]+)%*", pos)
+        if not s then
+            table.insert(segments, { text = text:sub(pos), emote = false })
+            break
         end
-    end
-
-    return pretty_msg
-end
-
-function TC_FormatChatMessage(payload)
-    local prefix = ""
-    if cached_show_timestamps then
-        prefix = _format_clock_timestamp()
-    end
-    return prefix .. _wrap_message(payload)
-end
-
-function TC_GenerateLogFile()
-    _P("test")
-    local log_file_path = "Data/Logs/Text-Chat_Log_" .. Ext.Timer.ClockTime():gsub("[ %.:]", "-") .. ".log"
-    Ext.IO.SaveFile(log_file_path, chat_history)
-end
-
-Ext.Events.NetMessage:Subscribe(function (event)
-    if event.Channel == CHANNEL then
-        if event.Payload:sub(1, 5) == "[OHT]" then -- Overhead text update command
-            Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, event.Payload:sub(7, event.Payload:len()))
-        else
-            local formatted_msg = TC_FormatChatMessage(event.Payload)
-            TC_UpdateChat(formatted_msg) -- Output all received Text-Chat messages.
-            chat_history = chat_history .. '\r\n' .. formatted_msg
+        if s > pos then
+            table.insert(segments, { text = text:sub(pos, s - 1), emote = false })
         end
+        table.insert(segments, { text = "*" .. inner .. "*", emote = true })
+        pos = e + 1
     end
-end)
+
+    if #segments == 0 then
+        table.insert(segments, { text = "", emote = false })
+    end
+
+    return segments
+end
