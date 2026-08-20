@@ -490,7 +490,22 @@ local ok_init, err = pcall(function()
 
     _submit_input = function()
         local text = input.Text or ""
-        if text == "" then return end
+        if text == "" then
+            if editing_message_id ~= nil then
+                editing_message_id = nil
+                if cached_draft_text then
+                    local restored = cached_draft_text
+                    cached_draft_text = nil
+                    suppress_next_change = true
+                    input.Text = restored
+                    last_seen_input_text = restored
+                    Ext.Timer.WaitFor(1, function() suppress_next_change = false end)
+                    _update_dynamic_input_size(restored)
+                end
+                _update_status_line()
+            end
+            return
+        end
 
         local wasEditing = (editing_message_id ~= nil)
 
@@ -552,7 +567,10 @@ local ok_init, err = pcall(function()
         _update_dynamic_input_size(targetText)
         _update_status_line()
         _touch_activity()
-        _grant_real_focus()
+
+        if force then
+            _grant_real_focus()
+        end
     end
 
     local function _load_last_message_for_edit()
