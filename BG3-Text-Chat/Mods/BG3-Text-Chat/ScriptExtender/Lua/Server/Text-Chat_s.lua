@@ -1,6 +1,8 @@
 CHANNEL = "Text-Chat"
 local MSG_RECEIVED_EVENT = "TC_MessageReceived"
 
+local CFG = Ext.Require("Shared/Text-Chat_Config.lua")
+
 local connected_users = {}
 
 local last_message_by_user = {}
@@ -121,18 +123,89 @@ local function _handle_typing(event, data)
     _broadcast_except(event.UserID, { t = "typing", name = display_name, on = data.on and true or false })
 end
 
+local ROLL_EVENT_PREFIX = "TC_DiceRoll_"
+local pending_rolls = {}
+local next_roll_id = 1
+
 local function _handle_roll(event, data)
     local display_name, character = resolve_display_name_and_character(event.UserID)
     if not character then return end
 
-    local result = TC_Dice.Roll(character, data)
-    if not result then return end
+    local def
+    if data.kind == "skill" then
+        def = CFG.DiceSkillById[data.id]
+    elseif data.kind == "ability" then
+        def = CFG.DiceAbilityById[data.id]
+    end
+    local tier = CFG.DiceTierById[data.tier]
+    local roll_type = CFG.DiceRollTypeSet[data.rollType] and data.rollType or "active"
+    if not def or not tier then return end
 
-    result.t = "roll"
-    result.name = display_name
-    _broadcast(result)
+    if not tier.guid then CFG.ResolveDiceDifficultyClasses() end
+    if not tier.guid then
+        Ext.Utils.PrintWarning("[Text-Chat] Dice: no DifficultyClass available for DC " .. tostring(tier.dc))
+        _unicast(event.UserID, { t = "system", key = "dice.noDifficultyClass" })
+        return
+    end
 
-    _apply_overhead_text(character, nil, result)
+    local event_name = ROLL_EVENT_PREFIX .. tostring(next_roll_id)
+    next_roll_id = next_roll_id + 1
+
+    local advantage = data.adv and 1 or 0
+    local osi_roll_type = (data.kind == "skill") and "SkillCheck" or "RawAbility"
+
+    pending_rolls[event_name] = {
+        name = display_name,
+        character = character,
+        kind = data.kind,
+        id = def.id,
+        dc = tier.dc,
+        adv = advantage == 1,
+        active = roll_type == "active",
+    }
+
+    local ok, err = pcall(function()
+        if roll_type == "active" then
+            Osi.RequestActiveRoll(character, character, osi_roll_type, def.id, tier.guid, advantage, event_name)
+        else
+            Osi.RequestPassiveRoll(character, character, osi_roll_type, def.id, tier.guid, advantage, event_name)
+        end
+    end)
+    if not ok then
+        pending_rolls[event_name] = nil
+        Ext.Utils.PrintWarning("[Text-Chat] Dice: roll request failed: " .. tostring(err))
+        return
+    end
+
+    Ext.Timer.WaitForRealtime(CFG.DicePendingRollTimeoutMs, function()
+        pending_rolls[event_name] = nil
+    end)
+end
+
+-- resultType: 0 = failure, 1 = success, 2 = cancelled (active rolls only)
+-- criticality: 0 = none, 1 = critical success, 2 = critical failure
+local function _on_roll_result(event_name, roller, roll_subject, result_type, is_active_roll, criticality)
+    local p = pending_rolls[event_name]
+    if not p then return end
+    pending_rolls[event_name] = nil
+
+    local msg = {
+        t = "roll",
+        name = p.name,
+        kind = p.kind,
+        id = p.id,
+        dc = p.dc,
+        adv = p.adv,
+        active = p.active,
+        result = tonumber(result_type) or 0,
+        crit = tonumber(criticality) or 0,
+    }
+    _broadcast(msg)
+
+    -- Passive rolls already get the game's own overhead popup.
+    if p.active and msg.result ~= 2 then
+        _apply_overhead_text(p.character, nil, msg)
+    end
 end
 
 local function _handle_who(event)
@@ -167,6 +240,24 @@ local function _entity_event_handler(object, event)
     end
 end
 
+Ext.RegisterConsoleCommand("textchat_dice_dump", function()
+    CFG.ResolveDiceDifficultyClasses()
+    Ext.Utils.Print("[Text-Chat] Dice DC tiers:")
+    for _, tier in ipairs(CFG.DiceDifficultyTiers) do
+        local values = "-"
+        pcall(function()
+            local res = Ext.StaticData.Get(tier.guid, "DifficultyClass")
+            local list = {}
+            for _, v in ipairs(res.Difficulties) do table.insert(list, tostring(v)) end
+            values = table.concat(list, ",") .. " (" .. tostring(res.Name) .. ")"
+        end)
+        Ext.Utils.Print(string.format("  %-16s DC %-2d %s %s", tier.id, tier.dc, tostring(tier.guid), values))
+    end
+end)
+
+Ext.Events.SessionLoaded:Subscribe(function() CFG.ResolveDiceDifficultyClasses() end)
+
+Ext.Osiris.RegisterListener("RollResult", 6, "after", _on_roll_result)
 Ext.Osiris.RegisterListener("EntityEvent", 2, "after", _entity_event_handler)
 Ext.Osiris.RegisterListener("UserConnected", 3, "after", on_user_connected)
 Ext.Osiris.RegisterListener("UserDisconnected", 3, "after", on_user_disconnected)

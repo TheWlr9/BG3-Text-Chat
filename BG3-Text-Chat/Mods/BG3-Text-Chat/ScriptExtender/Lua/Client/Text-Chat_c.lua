@@ -154,14 +154,75 @@ function TC_SendTyping(isTyping)
     _post({ t = "typing", on = isTyping and true or false })
 end
 
-function TC_SendRoll(kind, id, mode, dc)
-    if not kind or not id then return end
-    _post({ t = "roll", kind = kind, id = id, mode = mode or "normal", dc = dc })
+function TC_SendRoll(kind, id, roll_type, tier, advantage)
+    if not kind or not id or not tier then return end
+    _post({ t = "roll", kind = kind, id = id, rollType = roll_type or "active", tier = tier, adv = advantage and true or false })
 end
 
 function TC_SendWho()
     _post({ t = "who" })
 end
+
+local UTF8_CHAR = "[\1-\127\194-\244][\128-\191]*"
+
+local ACCENT_FOLD = {}
+for base, accented in pairs({
+    a = "àáâãäåā", c = "çćč", e = "èéêëēėę", i = "ìíîïī", n = "ñń", o = "òóôõöøō",
+    u = "ùúûüū", y = "ýÿ", s = "śš", z = "źżž", l = "ł",
+}) do
+    for ch in accented:gmatch(UTF8_CHAR) do
+        ACCENT_FOLD[ch] = base
+    end
+end
+
+local function _sort_key(text)
+    return (text:lower():gsub(UTF8_CHAR, function(ch) return ACCENT_FOLD[ch] or ch end))
+end
+
+function TC_GetSortedSkills()
+    local T = Lang.T
+    local sorted = {}
+    for _, s in ipairs(CFG.DiceSkills) do table.insert(sorted, s) end
+    table.sort(sorted, function(a, b) return _sort_key(T("skill." .. a.id)) < _sort_key(T("skill." .. b.id)) end)
+    return sorted
+end
+
+local function _roll_result_text(r)
+    local T = Lang.T
+    local result = tonumber(r.result) or 0
+    local crit = tonumber(r.crit) or 0
+    if result == 2 then return T("dice.cancelled") end
+    if crit == 1 then return T("dice.criticalSuccess") end
+    if crit == 2 then return T("dice.criticalFailure") end
+    return T(result == 1 and "dice.success" or "dice.failure")
+end
+
+function TC_FormatRoll(r)
+    if type(r) ~= "table" then return "" end
+    local T = Lang.T
+
+    local title
+    if r.kind == "ability" then
+        title = T("check." .. tostring(r.id))
+    else
+        title = T("skill." .. tostring(r.id))
+    end
+    if r.adv then
+        title = title .. " " .. T("dice.advantage")
+    end
+
+    return string.format("~ %s - %s - %s : %s ~",
+        tostring(r.name), title, T("dice.dcValue", math.floor(tonumber(r.dc) or 0)), _roll_result_text(r))
+end
+
+function TC_FormatRollOverhead(r)
+    if type(r) ~= "table" then return "" end
+    local T = Lang.T
+    local label = T((r.kind == "ability" and "ability." or "skill.") .. tostring(r.id))
+    return T("dice.overhead", label, _roll_result_text(r))
+end
+
+Ext.Events.SessionLoaded:Subscribe(function() CFG.ResolveDiceDifficultyClasses() end)
 
 function TC_GenerateLogFile(lines)
     local stamp = tostring(Ext.Timer.ClockTime()):gsub("[ %.:]", "-")

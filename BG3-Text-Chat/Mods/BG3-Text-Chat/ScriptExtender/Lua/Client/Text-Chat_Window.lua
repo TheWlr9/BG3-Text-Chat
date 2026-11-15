@@ -10,7 +10,6 @@ local ok_init, err = pcall(function()
     local CFG = Ext.Require("Shared/Text-Chat_Config.lua")
     local Lang = Ext.Require("Shared/Text-Chat_Lang.lua")
     local T = Lang.T
-    local Dice = Ext.Require("Client/Text-Chat_Dice.lua")
 
     local CONFIG = {
         MinChatW = 360,
@@ -128,7 +127,6 @@ local ok_init, err = pcall(function()
     local _toggle_settings
     local _toggle_dice
     local _apply_language
-    local Dice_api
 
     local i18n_bound = {}
 
@@ -165,7 +163,7 @@ local ok_init, err = pcall(function()
     end
 
     local function _system_text(rec)
-        if rec.roll and Dice_api then return Dice_api.format_roll(rec.roll) end
+        if rec.roll then return TC_FormatRoll(rec.roll) end
         if rec.key then
             if rec.arg ~= nil then return T(rec.key, rec.arg) end
             return T(rec.key)
@@ -526,6 +524,76 @@ local ok_init, err = pcall(function()
     _add_separator_text(settings_panel, "settings.tools")
     local generate_log_button = _bind(settings_panel:AddButton(T("settings.generateLog")), "settings.generateLog")
     _full_width(generate_log_button, true)
+
+    local dice_character_name = ""
+    local dice_last_who_ms = -999999
+    local dice_skill_order = {}
+
+    local function _dice_character_label()
+        return T("dice.character", dice_character_name ~= "" and dice_character_name or "-")
+    end
+
+    local dice_character_text = _add_text(dice_panel, _dice_character_label)
+
+    _add_text(dice_panel, "dice.rollType")
+    local dice_type_combo = dice_panel:AddCombo("##dice_type")
+    dice_type_combo.SelectedIndex = 0
+    _full_width(dice_type_combo)
+
+    local dice_adv_checkbox = _bind(dice_panel:AddCheckbox(T("dice.advantageOption"), false), "dice.advantageOption")
+
+    _add_text(dice_panel, "dice.dc")
+    local dice_dc_combo = dice_panel:AddCombo("##dice_dc")
+    dice_dc_combo.SelectedIndex = CFG.DiceDefaultTierIndex - 1
+    _full_width(dice_dc_combo)
+
+    _add_separator_text(dice_panel, "dice.abilities")
+    local dice_ability_combo = dice_panel:AddCombo("##dice_ability")
+    dice_ability_combo.SelectedIndex = 0
+    _full_width(dice_ability_combo)
+    local dice_ability_button = _bind(dice_panel:AddButton(T("dice.rollAbility")), "dice.rollAbility")
+    _full_width(dice_ability_button, true)
+
+    _add_separator_text(dice_panel, "dice.skills")
+    local dice_skill_combo = dice_panel:AddCombo("##dice_skill")
+    dice_skill_combo.SelectedIndex = 0
+    _full_width(dice_skill_combo)
+    local dice_skill_button = _bind(dice_panel:AddButton(T("dice.rollSkill")), "dice.rollSkill")
+    _full_width(dice_skill_button, true)
+
+    local function _fill_dice_options()
+        local type_index = dice_type_combo.SelectedIndex
+        local dc_index = dice_dc_combo.SelectedIndex
+
+        local type_options = {}
+        for _, t in ipairs(CFG.DiceRollTypes) do table.insert(type_options, T("dice.type." .. t)) end
+        dice_type_combo.Options = type_options
+
+        local dc_options = {}
+        for _, tier in ipairs(CFG.DiceDifficultyTiers) do
+            table.insert(dc_options, T("dice.tierLabel", T("dice.tier." .. tier.id), tier.dc))
+        end
+        dice_dc_combo.Options = dc_options
+        dice_type_combo.SelectedIndex = type_index
+        dice_dc_combo.SelectedIndex = dc_index
+
+        local ability_options = {}
+        for _, a in ipairs(CFG.DiceAbilities) do table.insert(ability_options, T("ability." .. a.id)) end
+        dice_ability_combo.Options = ability_options
+
+        local selected = dice_skill_order[dice_skill_combo.SelectedIndex + 1]
+        local selected_id = selected and selected.id or nil
+
+        dice_skill_order = TC_GetSortedSkills()
+        local skill_options, new_index = {}, 0
+        for i, s in ipairs(dice_skill_order) do
+            table.insert(skill_options, T("skill." .. s.id))
+            if s.id == selected_id then new_index = i - 1 end
+        end
+        dice_skill_combo.Options = skill_options
+        dice_skill_combo.SelectedIndex = new_index
+    end
+    _fill_dice_options()
 
     local INPUT_PAD = 12
 
@@ -952,7 +1020,7 @@ local ok_init, err = pcall(function()
         _apply_bound_labels()
         _fill_chat_format_options()
         chat_format_combo.SelectedIndex = _chat_format_to_index(chat_format)
-        if Dice_api then Dice_api.relanguage() end
+        _fill_dice_options()
         _apply_move_mode()
         _update_status_line()
         _rebuild_chat_display()
@@ -1044,15 +1112,29 @@ local ok_init, err = pcall(function()
 
     settings_button.OnClick = _with_send_suppressed(function() _toggle_settings() end)
     dice_button.OnClick = _with_send_suppressed(function() _toggle_dice() end)
-    Dice_api = Dice.Build({
-        panel = dice_panel,
-        add_text = _add_text,
-        add_separator_text = _add_separator_text,
-        bind = _bind,
-        full_width = _full_width,
-        wrap = _with_send_suppressed,
-        touch = function() _touch_activity() end,
-    })
+
+    local function _send_dice_roll(kind, def)
+        if not def then return end
+        _touch_activity()
+        local tier = CFG.DiceDifficultyTiers[dice_dc_combo.SelectedIndex + 1]
+        if not tier then return end
+        TC_SendRoll(kind, def.id, CFG.DiceRollTypes[dice_type_combo.SelectedIndex + 1], tier.id, dice_adv_checkbox.Checked)
+    end
+
+    dice_ability_button.OnClick = _with_send_suppressed(function()
+        _send_dice_roll("ability", CFG.DiceAbilities[dice_ability_combo.SelectedIndex + 1])
+    end)
+
+    dice_skill_button.OnClick = _with_send_suppressed(function()
+        _send_dice_roll("skill", dice_skill_order[dice_skill_combo.SelectedIndex + 1])
+    end)
+
+    local function _on_dice_widget_change() _touch_activity() end
+    dice_type_combo.OnChange = _on_dice_widget_change
+    dice_adv_checkbox.OnChange = _on_dice_widget_change
+    dice_dc_combo.OnChange = _on_dice_widget_change
+    dice_ability_combo.OnChange = _on_dice_widget_change
+    dice_skill_combo.OnChange = _on_dice_widget_change
 
     generate_log_button.OnClick = _with_send_suppressed(function()
         local lines = {}
@@ -1198,7 +1280,7 @@ local ok_init, err = pcall(function()
             settings_visible = false
             listening_for_open_key = false
             open_key_button.Label = _open_key_label()
-            Dice_api.refresh_now()
+            dice_last_who_ms = -999999
             _update_windows()
         else
             _touch_activity()
@@ -1320,8 +1402,12 @@ local ok_init, err = pcall(function()
 
         _sync_ui_hidden_from_root()
 
-        if Dice_api then
-            Dice_api.tick(Ext.Utils.MonotonicTime(), in_game and dice_visible and (not game_ui_hidden))
+        if in_game and dice_visible and (not game_ui_hidden) then
+            local now_ms = Ext.Utils.MonotonicTime()
+            if (now_ms - dice_last_who_ms) >= CFG.DiceWhoPollMs then
+                dice_last_who_ms = now_ms
+                TC_SendWho()
+            end
         end
 
         if move_mode then
@@ -1394,7 +1480,8 @@ local ok_init, err = pcall(function()
         elseif data.t == "roll" then
             _add_chat_entry(nil, nil, nil, "system", { roll = data })
         elseif data.t == "who" then
-            if Dice_api then Dice_api.set_character(data.name) end
+            dice_character_name = (type(data.name) == "string") and data.name or ""
+            dice_character_text.Label = _dice_character_label()
         elseif data.t == "ack" then
             my_last_message = { id = data.id, text = data.body }
         elseif data.t == "typing" then
@@ -1416,7 +1503,7 @@ local ok_init, err = pcall(function()
             end
         elseif data.t == "oht" then
             local body = data.body or ""
-            if type(data.roll) == "table" then body = Dice_api.format_overhead(data.roll) end
+            if type(data.roll) == "table" then body = TC_FormatRollOverhead(data.roll) end
             local text = overhead_text_enabled and body or " "
             if text == "" then text = " " end
             pcall(function() Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, text) end)
