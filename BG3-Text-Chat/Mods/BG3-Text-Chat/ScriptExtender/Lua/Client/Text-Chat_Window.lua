@@ -8,28 +8,28 @@ end
 
 local ok_init, err = pcall(function()
     local CFG = Ext.Require("Shared/Text-Chat_Config.lua")
+    local Lang = Ext.Require("Shared/Text-Chat_Lang.lua")
+    local T = Lang.T
+    local Dice = Ext.Require("Client/Text-Chat_Dice.lua")
 
     local CONFIG = {
         MinChatW = 360,
         MinChatH = 140,
 
-        BaseInputH = 34,
-
-        ButtonW = 52,
-        ButtonH = 32,
         ButtonYOffset = 0,
 
         TopBarPad = 7,
 
         ClampMargin = 5,
 
-        DefaultGreeting = "~ Tip: Ctrl+Enter for a new line, Up Arrow to edit your last message ~",
+        RefFrameH = 32,
     }
 
     local settings_loaded = false
     local initial_hint_shown = false
     local chat_enabled = true
     local settings_visible = false
+    local dice_visible = false
 
     local listening_for_open_key = false
     local in_game = false
@@ -65,7 +65,15 @@ local ok_init, err = pcall(function()
     local chat_size = {CFG.DefaultWindowWidth, CFG.DefaultWindowHeight}
     local chat_position = {CFG.DefaultWindowXPos, CFG.DefaultWindowYPos}
     local cached_game_window_width = 1920
-    local current_input_h = CONFIG.BaseInputH
+    local current_input_h = CFG.InputFirstLineHeightPx + 24
+
+    local metrics = {
+        text_h = CFG.InputExtraLineHeightPx,
+        frame_h = CFG.InputFirstLineHeightPx,
+        edit_w = 46,
+        topbar_w = 280,
+        topbar_h = CFG.InputFirstLineHeightPx + (2 * CONFIG.TopBarPad),
+    }
 
     local current_status_h = 0
 
@@ -88,6 +96,8 @@ local ok_init, err = pcall(function()
 
     local chat_messages = {}
     local chat_messages_by_id = {}
+
+    local session_log = {}
 
     local editing_message_id = nil
 
@@ -116,6 +126,52 @@ local ok_init, err = pcall(function()
     local _prune_typing_users
     local _apply_move_mode
     local _toggle_settings
+    local _toggle_dice
+    local _apply_language
+    local Dice_api
+
+    local i18n_bound = {}
+
+    local function _label_of(spec)
+        if type(spec) == "function" then return spec() end
+        return T(spec)
+    end
+
+    local function _bind(widget, spec)
+        table.insert(i18n_bound, { widget = widget, spec = spec })
+        return widget
+    end
+
+    local function _apply_bound_labels()
+        for _, b in ipairs(i18n_bound) do
+            pcall(function() b.widget.Label = _label_of(b.spec) end)
+        end
+    end
+
+    local function _add_text(parent, spec)
+        local w = parent:AddText(_label_of(spec))
+        pcall(function() w.TextWrapPos = 0 end)
+        return _bind(w, spec)
+    end
+
+    local function _add_separator_text(parent, spec)
+        return _bind(parent:AddSeparatorText(_label_of(spec)), spec)
+    end
+
+    local panel_full_width = {}
+    local function _full_width(widget, is_button)
+        table.insert(panel_full_width, { widget = widget, button = is_button and true or false })
+        return widget
+    end
+
+    local function _system_text(rec)
+        if rec.roll and Dice_api then return Dice_api.format_roll(rec.roll) end
+        if rec.key then
+            if rec.arg ~= nil then return T(rec.key, rec.arg) end
+            return T(rec.key)
+        end
+        return rec.raw or ""
+    end
 
     _get_root_visible = function()
         local gotRootObject, rootObject = pcall(function()
@@ -175,7 +231,7 @@ local ok_init, err = pcall(function()
 
         chat_position[1] = math.max(CONFIG.ClampMargin, math.min(chat_position[1], w - total_w - CONFIG.ClampMargin))
 
-        local min_y = CONFIG.ClampMargin + CONFIG.ButtonH + (2 * CONFIG.TopBarPad)
+        local min_y = CONFIG.ClampMargin + metrics.topbar_h
         local max_y = h - total_h - CONFIG.ClampMargin
         chat_position[2] = math.max(min_y, math.min(chat_position[2], max_y))
     end
@@ -222,7 +278,6 @@ local ok_init, err = pcall(function()
 
     text_parent:SetStyle("ItemSpacing", 0, 3)
 
-    local TYPING_STATUS_H = 34
     local status_window = Ext.IMGUI.NewWindow("Text-Chat_Status")
     status_window.NoTitleBar = true
     status_window.NoFocusOnAppearing = true
@@ -236,7 +291,6 @@ local ok_init, err = pcall(function()
     local status_text = status_window:AddText("")
     status_text:SetStyle("Alpha", 1)
     pcall(function() status_text:SetColor("Text", CFG.TypingIndicatorColor) end)
-
     local input_parent = Ext.IMGUI.NewWindow("Text-Chat_Input")
     input_parent.NoTitleBar = true
 
@@ -251,13 +305,11 @@ local ok_init, err = pcall(function()
     input.Multiline = true
     input.CtrlEnterForNewLine = true
 
-    local EDIT_BUTTON_W = 46
-
     local EDIT_BUTTON_GAP = 12
 
-    local edit_button = input_parent:AddButton("Edit")
+    local edit_button = input_parent:AddButton(T("input.edit"))
     edit_button.SameLine = true
-    edit_button.ItemWidth = EDIT_BUTTON_W
+    _bind(edit_button, "input.edit")
 
     local function _grant_real_focus()
         input.Label = "###Input" .. tostring(Ext.Utils.MonotonicTime())
@@ -277,9 +329,6 @@ local ok_init, err = pcall(function()
     local TOP_BAR_PAD = CONFIG.TopBarPad
     local TOP_BAR_GAP = 7
     local TOP_BAR_RIGHT_EXTRA = 8
-    local TOP_BAR_W = (CONFIG.ButtonW * 3) + (2 * TOP_BAR_GAP) + (2 * TOP_BAR_PAD) + TOP_BAR_RIGHT_EXTRA
-
-    local TOP_BAR_TOTAL_H = CONFIG.ButtonH + (2 * TOP_BAR_PAD)
 
     local settings_button_window = Ext.IMGUI.NewWindow("Text-Chat_TopBar")
     settings_button_window.NoTitleBar = true
@@ -291,63 +340,119 @@ local ok_init, err = pcall(function()
     settings_button_window.Visible = false
     settings_button_window:SetStyle("WindowPadding", TOP_BAR_PAD, TOP_BAR_PAD)
     settings_button_window:SetStyle("ItemSpacing", TOP_BAR_GAP, 4)
-    settings_button_window:SetSize({TOP_BAR_W, TOP_BAR_TOTAL_H})
     settings_button_window.NoInputs = false
+
+    settings_button_window.AlwaysAutoResize = true
+    settings_button_window:SetStyle("WindowMinSize", 1, 1)
+
+    local function _new_probe(name)
+        local w = Ext.IMGUI.NewWindow(name)
+        w.NoTitleBar = true
+        w.NoMove = true
+        w.NoResize = true
+        w.NoScrollbar = true
+        w.NoNav = true
+        w.NoInputs = true
+        w.NoFocusOnAppearing = true
+        w.NoBackground = true
+        w.AlwaysAutoResize = true
+        pcall(function() w.NoMouseInputs = true end)
+        pcall(function() w.NoBringToFrontOnFocus = true end)
+        w:SetStyle("WindowPadding", 0, 0)
+        w:SetStyle("WindowMinSize", 1, 1)
+        w:SetStyle("Alpha", 0.01)
+        w:SetPos({0, 0})
+        return w
+    end
+
+    local probe_text = _new_probe("Text-Chat_ProbeText")
+    probe_text:AddText("Ag")
+    local probe_frame = _new_probe("Text-Chat_ProbeFrame")
+    probe_frame:AddButton("Ag")
+    local probe_edit = _new_probe("Text-Chat_ProbeEdit")
+    _bind(probe_edit:AddButton(T("input.edit")), "input.edit")
 
     local MENU_BUTTON_COLOR_CLOSED = {0.3, 0.18, 0.09, 1.0}
 
     local MENU_BUTTON_COLOR_OPEN = {0.42, 0.28, 0.18, 1.0}
 
-    local settings_button = settings_button_window:AddButton("Menu")
-    settings_button.ItemWidth = CONFIG.ButtonW
+    local settings_button = _bind(settings_button_window:AddButton(T("top.menu")), "top.menu")
     pcall(function() settings_button:SetColor("Button", MENU_BUTTON_COLOR_CLOSED) end)
-
-    local clear_button_top = settings_button_window:AddButton("Clear")
+    local dice_button = _bind(settings_button_window:AddButton(T("top.dice")), "top.dice")
+    dice_button.SameLine = true
+    pcall(function() dice_button:SetColor("Button", MENU_BUTTON_COLOR_CLOSED) end)
+    local clear_button_top = _bind(settings_button_window:AddButton(T("top.clear")), "top.clear")
     clear_button_top.SameLine = true
-    clear_button_top.ItemWidth = CONFIG.ButtonW
 
-    local close_button_top = settings_button_window:AddButton("Close")
+    local close_button_top = _bind(settings_button_window:AddButton(T("top.close")), "top.close")
     close_button_top.SameLine = true
-    close_button_top.ItemWidth = CONFIG.ButtonW
 
     local SETTINGS_PANEL_W = 340
     local SETTINGS_PANEL_H = 520
-
-    local settings_panel = Ext.IMGUI.NewWindow("Text-Chat_Settings")
-    settings_panel.NoTitleBar = true
-    settings_panel.NoMove = true
-    settings_panel.NoResize = true
-    settings_panel.NoNav = true
-    settings_panel.Visible = false
-    settings_panel:SetSize({SETTINGS_PANEL_W, SETTINGS_PANEL_H})
-    settings_panel:SetStyle("WindowPadding", 14, 12)
-    settings_panel.NoScrollbar = false
-
+    local PANEL_PAD_X = 14
     local SETTINGS_SCROLLBAR_MARGIN = 16
-    local SETTINGS_WIDGET_W = SETTINGS_PANEL_W - 28 - SETTINGS_SCROLLBAR_MARGIN
 
-    settings_panel:AddSeparatorText("Display")
+    local function _panel_w()
+        return math.floor((SETTINGS_PANEL_W * math.max(metrics.frame_h / CONFIG.RefFrameH, 1.0)) + 0.5)
+    end
 
-    local move_mode_checkbox = settings_panel:AddCheckbox("Move Mode", move_mode)
+    local function _panel_widget_w()
+        return _panel_w() - (2 * PANEL_PAD_X) - SETTINGS_SCROLLBAR_MARGIN
+    end
+
+    local function _apply_panel_widths()
+        local w = _panel_widget_w()
+        for _, e in ipairs(panel_full_width) do
+            e.widget.ItemWidth = w
+            if e.button then
+                pcall(function() e.widget.Size = {w, 0} end)
+            end
+        end
+    end
+
+    local function _new_side_panel(name)
+        local p = Ext.IMGUI.NewWindow(name)
+        p.NoTitleBar = true
+        p.NoMove = true
+        p.NoResize = true
+        p.NoNav = true
+        p.Visible = false
+        p:SetSize({SETTINGS_PANEL_W, SETTINGS_PANEL_H})
+        p:SetStyle("WindowPadding", PANEL_PAD_X, 12)
+        p.NoScrollbar = false
+        return p
+    end
+
+    local settings_panel = _new_side_panel("Text-Chat_Settings")
+    local dice_panel = _new_side_panel("Text-Chat_Dice")
+
+    local function _open_key_label()
+        if listening_for_open_key then return T("settings.keyPress") end
+        return T("settings.keyCurrent", open_key)
+    end
+
+    _add_separator_text(settings_panel, "settings.display")
+
+    local move_mode_checkbox = _bind(settings_panel:AddCheckbox(T("settings.moveMode"), move_mode), "settings.moveMode")
     move_mode_checkbox.OnChange = function()
         move_mode = move_mode_checkbox.Checked
         _apply_move_mode()
         _apply_visibility()
     end
 
-    local timestamps_checkbox = settings_panel:AddCheckbox("Timestamps", show_timestamps)
+    local timestamps_checkbox = _bind(settings_panel:AddCheckbox(T("settings.timestamps"), show_timestamps), "settings.timestamps")
 
-    local hint_message_checkbox = settings_panel:AddCheckbox("Show shortcuts hint", show_hint_message)
+    local hint_message_checkbox = _bind(settings_panel:AddCheckbox(T("settings.hint"), show_hint_message), "settings.hint")
 
-    local overhead_text_checkbox = settings_panel:AddCheckbox("Text above character", overhead_text_enabled)
+    local overhead_text_checkbox = _bind(settings_panel:AddCheckbox(T("settings.overhead"), overhead_text_enabled), "settings.overhead")
     overhead_text_checkbox.OnChange = function()
         overhead_text_enabled = overhead_text_checkbox.Checked
         _save_window_settings()
     end
 
-    settings_panel:AddText("Opacity (input focused)")
+    _add_text(settings_panel, "settings.opacityActive")
     local active_alpha_slider = settings_panel:AddSlider("##active_alpha", active_alpha, 0.1, 1.0)
-    active_alpha_slider.ItemWidth = SETTINGS_WIDGET_W
+    _full_width(active_alpha_slider)
     active_alpha_slider.OnChange = function()
         local ok, v = pcall(function() return active_alpha_slider.Value[1] end)
         if ok and v then active_alpha = v end
@@ -355,9 +460,9 @@ local ok_init, err = pcall(function()
         _save_window_settings()
     end
 
-    settings_panel:AddText("Opacity (idle)")
+    _add_text(settings_panel, "settings.opacityIdle")
     local inactive_alpha_slider = settings_panel:AddSlider("##inactive_alpha", inactive_alpha, 0.1, 1.0)
-    inactive_alpha_slider.ItemWidth = SETTINGS_WIDGET_W
+    _full_width(inactive_alpha_slider)
     inactive_alpha_slider.OnChange = function()
         local ok, v = pcall(function() return inactive_alpha_slider.Value[1] end)
         if ok and v then inactive_alpha = v end
@@ -365,23 +470,34 @@ local ok_init, err = pcall(function()
         _save_window_settings()
     end
 
-    settings_panel:AddText("Chat format")
+    _add_text(settings_panel, "settings.chatFormat")
     local chat_format_combo = settings_panel:AddCombo("##chat_format")
-    chat_format_combo.ItemWidth = SETTINGS_WIDGET_W
-    chat_format_combo.Options = {"Classic", "Modern", "Discord", "Roleplayer"}
+    _full_width(chat_format_combo)
+    local function _fill_chat_format_options()
+        chat_format_combo.Options = { T("format.classic"), T("format.modern"), T("format.discord"), T("format.roleplayer") }
+    end
+    _fill_chat_format_options()
     chat_format_combo.SelectedIndex = _chat_format_to_index(chat_format)
 
-    settings_panel:AddSeparatorText("Behavior")
+    _add_text(settings_panel, "settings.language")
+    local language_combo = settings_panel:AddCombo("##language")
+    _full_width(language_combo)
+    local language_names = {}
+    for _, l in ipairs(Lang.Languages) do table.insert(language_names, l.name) end
+    language_combo.Options = language_names
+    language_combo.SelectedIndex = (Lang.IndexOf(Lang.Current) or 1) - 1
 
-    settings_panel:AddText("Open key")
-    local open_key_button = settings_panel:AddButton("Current: " .. open_key)
-    open_key_button.ItemWidth = SETTINGS_WIDGET_W
+    _add_separator_text(settings_panel, "settings.behavior")
 
-    local typing_notif_checkbox = settings_panel:AddCheckbox("Typing notifications", typing_notifications_enabled)
+    _add_text(settings_panel, "settings.openKey")
+    local open_key_button = settings_panel:AddButton(_open_key_label())
+    _bind(open_key_button, _open_key_label)
+    _full_width(open_key_button, true)
+
+    local typing_notif_checkbox = _bind(settings_panel:AddCheckbox(T("settings.typing"), typing_notifications_enabled), "settings.typing")
     typing_notif_checkbox.OnChange = function()
         typing_notifications_enabled = typing_notif_checkbox.Checked
         if not typing_notifications_enabled then
-
             if next(typing_users) ~= nil then
                 typing_users = {}
                 _update_status_line()
@@ -391,21 +507,25 @@ local ok_init, err = pcall(function()
         _save_window_settings()
     end
 
-    local auto_hide_checkbox = settings_panel:AddCheckbox("Auto-hide", auto_hide_enabled)
+    local auto_hide_checkbox = _bind(settings_panel:AddCheckbox(T("settings.autoHide"), auto_hide_enabled), "settings.autoHide")
     auto_hide_checkbox.OnChange = function()
         auto_hide_enabled = auto_hide_checkbox.Checked
         if not auto_hide_enabled then _touch_activity() end
         _save_window_settings()
     end
 
-    settings_panel:AddText("Auto-hide delay (seconds)")
+    _add_text(settings_panel, "settings.autoHideDelay")
     local auto_hide_delay_slider = settings_panel:AddSliderInt("##auto_hide_delay", auto_hide_delay, 1, 60)
-    auto_hide_delay_slider.ItemWidth = SETTINGS_WIDGET_W
+    _full_width(auto_hide_delay_slider)
     auto_hide_delay_slider.OnChange = function()
         local ok, v = pcall(function() return auto_hide_delay_slider.Value[1] end)
         if ok and v then auto_hide_delay = v end
         _save_window_settings()
     end
+
+    _add_separator_text(settings_panel, "settings.tools")
+    local generate_log_button = _bind(settings_panel:AddButton(T("settings.generateLog")), "settings.generateLog")
+    _full_width(generate_log_button, true)
 
     local INPUT_PAD = 12
 
@@ -418,22 +538,26 @@ local ok_init, err = pcall(function()
         return n
     end
 
-    _update_dynamic_input_size = function(_)
-        local field_w = math.max(chat_size[1] - (2 * INPUT_PAD) - EDIT_BUTTON_W - EDIT_BUTTON_GAP, 80)
+    local function _first_line_h() return math.ceil(metrics.frame_h) + 1 end
+    local function _extra_line_h() return math.max(math.ceil(metrics.text_h), 1) end
+    local function _base_input_h() return _first_line_h() + (2 * INPUT_PAD) end
+    local function _typing_h() return math.max(34, math.ceil(metrics.frame_h) + 2) end
 
-        local base_input_h = CFG.InputFirstLineHeightPx + (2 * INPUT_PAD)
+    _update_dynamic_input_size = function(_)
+        local field_w = math.max(chat_size[1] - (2 * INPUT_PAD) - math.ceil(metrics.edit_w) - EDIT_BUTTON_GAP, 80)
+
+        local base_input_h = _base_input_h()
         local min_allowed_chat_h = math.max(CONFIG.MinChatH, chat_size[2] / 2)
         local max_extra_h = math.max(chat_size[2] - min_allowed_chat_h, 0)
-        local max_extra_lines = math.floor(max_extra_h / CFG.InputExtraLineHeightPx)
+        local max_extra_lines = math.floor(max_extra_h / _extra_line_h())
         local dynamicMaxLines = 1 + max_extra_lines
 
         local lineCount = math.min(_count_input_lines(input.Text or ""), dynamicMaxLines)
-        local content_h = CFG.InputFirstLineHeightPx + (lineCount - 1) * CFG.InputExtraLineHeightPx
+        local content_h = _first_line_h() + (lineCount - 1) * _extra_line_h()
         current_input_h = content_h + (2 * INPUT_PAD)
 
         pcall(function() input.SizeHint = {field_w, content_h} end)
         input.ItemWidth = field_w
-        edit_button.ItemWidth = EDIT_BUTTON_W
 
         local extra_h = math.max(current_input_h - base_input_h, 0)
         local effective_chat_h = math.max(chat_size[2] - extra_h, CONFIG.MinChatH)
@@ -460,13 +584,13 @@ local ok_init, err = pcall(function()
         if #names == 0 then
             status_text.Label = ""
         elseif #names == 1 then
-            status_text.Label = names[1] .. " is typing..."
+            status_text.Label = T("status.typing", names[1])
         else
 
-            status_text.Label = "Several people are typing..."
+            status_text.Label = T("status.several")
         end
 
-        current_status_h = TYPING_STATUS_H
+        current_status_h = _typing_h()
         status_window.Visible = (in_game and chat_enabled and not game_ui_hidden and not chat_hidden_by_idle)
 
         _update_dynamic_input_size()
@@ -482,7 +606,6 @@ local ok_init, err = pcall(function()
             end
         end
         if changed and next(typing_users) == nil then
-
             _touch_activity()
         end
         return changed
@@ -563,7 +686,6 @@ local ok_init, err = pcall(function()
         input.Text = targetText
         last_seen_input_text = targetText
         Ext.Timer.WaitFor(1, function() suppress_next_change = false end)
-
         _update_dynamic_input_size(targetText)
         _update_status_line()
         _touch_activity()
@@ -593,7 +715,6 @@ local ok_init, err = pcall(function()
                 TC_SendTyping(false)
                 last_typing_state_sent = false
             end
-
         end
 
         _update_dynamic_input_size(text)
@@ -631,7 +752,6 @@ local ok_init, err = pcall(function()
             local causedByClick = clickDuringThisFocus and (Ext.Utils.MonotonicTime() - last_mouse_press_ms) < 500
 
             if not causedByClick and not suppress_send_on_deactivate then
-
                 _submit_input()
             end
         end)
@@ -659,7 +779,6 @@ local ok_init, err = pcall(function()
     end
 
     local CHAT_FORMAT_BUILDERS = {
-
         classic = function(name, ts, showTs)
             if showTs then
                 return { { text = "[" .. ts .. "] <" .. name .. ">" } }
@@ -698,10 +817,11 @@ local ok_init, err = pcall(function()
 
     local function _render_message(rec, showName)
         if rec.kind == "system" then
-            local w = text_parent:AddText(rec.raw)
+            local text = _system_text(rec)
+            local w = text_parent:AddText(text)
             pcall(function() w.TextWrapPos = 0 end)
             w:SetStyle("Alpha", 1)
-            return { w }, rec.raw
+            return { w }, text
         end
 
         local body = rec.raw or ""
@@ -753,7 +873,7 @@ local ok_init, err = pcall(function()
         end
 
         if rec.edited then
-            _addLine(CFG.EditedSuffix, CFG.EditedColor, false)
+            _addLine(T("chat.edited"), CFG.EditedColor, false)
         end
 
         return widgets
@@ -791,17 +911,17 @@ local ok_init, err = pcall(function()
     local function _sync_hint_message_in_chat()
         if show_hint_message then
             for _, rec in ipairs(chat_messages) do
-                if rec.kind == "system" and rec.raw == CONFIG.DefaultGreeting then
+                if rec.kind == "system" and rec.key == "chat.hint" then
                     return
                 end
             end
-            table.insert(chat_messages, 1, { id = nil, name = nil, raw = CONFIG.DefaultGreeting, kind = "system", edited = false })
+            table.insert(chat_messages, 1, { id = nil, name = nil, key = "chat.hint", kind = "system", edited = false })
             _rebuild_chat_display()
         else
             local changed = false
             for i = #chat_messages, 1, -1 do
                 local rec = chat_messages[i]
-                if rec.kind == "system" and rec.raw == CONFIG.DefaultGreeting then
+                if rec.kind == "system" and rec.key == "chat.hint" then
                     table.remove(chat_messages, i)
                     changed = true
                 end
@@ -828,6 +948,25 @@ local ok_init, err = pcall(function()
         _save_window_settings()
     end
 
+    _apply_language = function()
+        _apply_bound_labels()
+        _fill_chat_format_options()
+        chat_format_combo.SelectedIndex = _chat_format_to_index(chat_format)
+        if Dice_api then Dice_api.relanguage() end
+        _apply_move_mode()
+        _update_status_line()
+        _rebuild_chat_display()
+        _update_windows()
+    end
+
+    language_combo.OnChange = function()
+        local l = Lang.Languages[language_combo.SelectedIndex + 1]
+        if l and Lang.Set(l.code) then
+            _apply_language()
+            _save_window_settings()
+        end
+    end
+
     local function _trim_old_messages()
         local overflow = #chat_messages - CFG.MaxKeptMessages
         if overflow <= 0 then return end
@@ -838,14 +977,18 @@ local ok_init, err = pcall(function()
         end
     end
 
-    _add_chat_entry = function(id, name, rawBody, kind)
+    _add_chat_entry = function(id, name, rawBody, kind, extra)
         local rec = {
             id = id, name = name, raw = rawBody, kind = kind, edited = false,
             addedAtMs = Ext.Utils.MonotonicTime(),
 
             timestampText = TC_FormatClockTimestamp(),
         }
+        if extra then
+            for k, v in pairs(extra) do rec[k] = v end
+        end
         table.insert(chat_messages, rec)
+        if not rec.nolog then table.insert(session_log, rec) end
         if id ~= nil then chat_messages_by_id[id] = rec end
 
         _trim_old_messages()
@@ -869,8 +1012,7 @@ local ok_init, err = pcall(function()
         chat_messages = {}
         chat_messages_by_id = {}
         if show_hint_message then
-
-            _add_chat_entry(nil, nil, CONFIG.DefaultGreeting, "system")
+            _add_chat_entry(nil, nil, nil, "system", { key = "chat.hint", nolog = true })
         else
 
             _rebuild_chat_display()
@@ -895,17 +1037,50 @@ local ok_init, err = pcall(function()
         input_active = false
 
         if settings_visible then _toggle_settings() end
+        if dice_visible then _toggle_dice() end
         _apply_visibility()
         _apply_clickthrough()
     end)
 
     settings_button.OnClick = _with_send_suppressed(function() _toggle_settings() end)
+    dice_button.OnClick = _with_send_suppressed(function() _toggle_dice() end)
+    Dice_api = Dice.Build({
+        panel = dice_panel,
+        add_text = _add_text,
+        add_separator_text = _add_separator_text,
+        bind = _bind,
+        full_width = _full_width,
+        wrap = _with_send_suppressed,
+        touch = function() _touch_activity() end,
+    })
+
+    generate_log_button.OnClick = _with_send_suppressed(function()
+        local lines = {}
+        for _, rec in ipairs(session_log) do
+            local text
+            if rec.kind == "system" then
+                text = _system_text(rec)
+            else
+                text = tostring(rec.name or "") .. ": " .. tostring(rec.raw or "")
+                if rec.edited then text = text .. " " .. T("chat.edited") end
+            end
+            local ts = rec.timestampText
+            if ts and ts ~= "" then text = "[" .. ts .. "] " .. text end
+            table.insert(lines, text)
+        end
+
+        local path = TC_GenerateLogFile(lines)
+        if path then
+            _add_chat_entry(nil, nil, nil, "system", { key = "chat.logSaved", arg = path, nolog = true })
+        else
+            _add_chat_entry(nil, nil, nil, "system", { key = "chat.logFailed", nolog = true })
+        end
+    end)
 
     edit_button.OnClick = _with_send_suppressed(function() _begin_edit_last_message(true) end)
-
     open_key_button.OnClick = _with_send_suppressed(function()
         listening_for_open_key = true
-        open_key_button.Label = "Press a key..."
+        open_key_button.Label = _open_key_label()
     end)
 
     _apply_clickthrough = function()
@@ -934,6 +1109,7 @@ local ok_init, err = pcall(function()
         move_mode_frame.Visible = show_chat and move_mode
 
         settings_panel.Visible = in_game and settings_visible and (not game_ui_hidden)
+        dice_panel.Visible = in_game and dice_visible and (not game_ui_hidden)
 
         _update_status_line()
         _apply_clickthrough()
@@ -961,6 +1137,8 @@ local ok_init, err = pcall(function()
             AutoHideDelaySeconds = auto_hide_delay,
             TypingNotificationsEnabled = typing_notifications_enabled,
             OverheadTextEnabled = overhead_text_enabled,
+
+            Language = Lang.Current,
         })
     end
 
@@ -968,10 +1146,12 @@ local ok_init, err = pcall(function()
         _clamp_to_screen()
 
         settings_button_window:SetPos({
-            chat_position[1] + chat_size[1] - TOP_BAR_W,
-            (chat_position[2] - TOP_BAR_TOTAL_H) + CONFIG.ButtonYOffset
+            chat_position[1] + chat_size[1] - metrics.topbar_w - TOP_BAR_RIGHT_EXTRA,
+            (chat_position[2] - metrics.topbar_h) + CONFIG.ButtonYOffset
         })
-        settings_button_window:SetSize({TOP_BAR_W, TOP_BAR_TOTAL_H})
+
+        local panelW = _panel_w()
+        _apply_panel_widths()
 
         local screenW = select(1, _get_root_size()) or cached_game_window_width
         local chatCenterX = chat_position[1] + (chat_size[1] / 2)
@@ -979,19 +1159,20 @@ local ok_init, err = pcall(function()
 
         local settingsPanelX
         if dockOnLeft then
-            settingsPanelX = chat_position[1] - SETTINGS_PANEL_W
+            settingsPanelX = chat_position[1] - panelW
         else
             settingsPanelX = chat_position[1] + chat_size[1]
         end
 
         settingsPanelX = math.max(settingsPanelX, CONFIG.ClampMargin)
-        settingsPanelX = math.min(settingsPanelX, screenW - SETTINGS_PANEL_W - CONFIG.ClampMargin)
+        settingsPanelX = math.min(settingsPanelX, screenW - panelW - CONFIG.ClampMargin)
 
-        local baseInputH = CFG.InputFirstLineHeightPx + (2 * INPUT_PAD)
-        local settingsPanelH = chat_size[2] + TYPING_STATUS_H + baseInputH
+        local settingsPanelH = chat_size[2] + _typing_h() + _base_input_h()
 
         settings_panel:SetPos({settingsPanelX, chat_position[2]})
-        settings_panel:SetSize({SETTINGS_PANEL_W, settingsPanelH})
+        settings_panel:SetSize({panelW, settingsPanelH})
+        dice_panel:SetPos({settingsPanelX, chat_position[2]})
+        dice_panel:SetSize({panelW, settingsPanelH})
 
         move_mode_frame:SetPos(chat_position)
         move_mode_frame:SetSize({chat_size[1], settingsPanelH})
@@ -1005,11 +1186,34 @@ local ok_init, err = pcall(function()
         settings_button_window:SetStyle("Alpha", a)
     end
 
+    local function _refresh_menu_button_colors()
+        pcall(function() settings_button:SetColor("Button", settings_visible and MENU_BUTTON_COLOR_OPEN or MENU_BUTTON_COLOR_CLOSED) end)
+        pcall(function() dice_button:SetColor("Button", dice_visible and MENU_BUTTON_COLOR_OPEN or MENU_BUTTON_COLOR_CLOSED) end)
+    end
+
+    _toggle_dice = function()
+        dice_visible = not dice_visible
+
+        if dice_visible then
+            settings_visible = false
+            listening_for_open_key = false
+            open_key_button.Label = _open_key_label()
+            Dice_api.refresh_now()
+            _update_windows()
+        else
+            _touch_activity()
+        end
+
+        _refresh_menu_button_colors()
+        _apply_visibility()
+    end
+
     _toggle_settings = function()
         settings_visible = not settings_visible
         listening_for_open_key = false
+        if settings_visible then dice_visible = false end
 
-        pcall(function() settings_button:SetColor("Button", settings_visible and MENU_BUTTON_COLOR_OPEN or MENU_BUTTON_COLOR_CLOSED) end)
+        _refresh_menu_button_colors()
 
         if settings_visible then
             timestamps_checkbox.Checked = show_timestamps
@@ -1019,11 +1223,10 @@ local ok_init, err = pcall(function()
             auto_hide_checkbox.Checked = auto_hide_enabled
             typing_notif_checkbox.Checked = typing_notifications_enabled
             move_mode_checkbox.Checked = move_mode
-            open_key_button.Label = "Current: " .. open_key
+            open_key_button.Label = _open_key_label()
             pcall(function() active_alpha_slider.Value = {active_alpha, 0, 0, 0} end)
             pcall(function() inactive_alpha_slider.Value = {inactive_alpha, 0, 0, 0} end)
             pcall(function() auto_hide_delay_slider.Value = {auto_hide_delay, 0, 0, 0} end)
-
             _update_windows()
         else
 
@@ -1040,7 +1243,7 @@ local ok_init, err = pcall(function()
 
         move_mode_frame.NoInputs = not move_mode
         if move_mode then
-            pcall(function() move_mode_frame.Label = "Text-Chat (drag to move/resize)" end)
+            pcall(function() move_mode_frame.Label = T("move.title") end)
         end
     end
 
@@ -1056,9 +1259,8 @@ local ok_init, err = pcall(function()
         if not newX or not newY or not newFrameW or not newFrameH then return end
         if newFrameW <= 0 or newFrameH <= 0 then return end
 
-        local baseInputH = CFG.InputFirstLineHeightPx + (2 * INPUT_PAD)
         local newChatW = newFrameW
-        local newChatH = newFrameH - TYPING_STATUS_H - baseInputH
+        local newChatH = newFrameH - _typing_h() - _base_input_h()
 
         local changed = (newX ~= chat_position[1]) or (newY ~= chat_position[2])
             or (newChatW ~= chat_size[1]) or (newChatH ~= chat_size[2])
@@ -1080,8 +1282,47 @@ local ok_init, err = pcall(function()
         end
     end)
 
+    local function _read_size(w)
+        local ok, size = pcall(function() return w.LastSize end)
+        if not ok or not size then return nil, nil end
+        local x, y = tonumber(size[1]), tonumber(size[2])
+        if not x or not y or x <= 0 or y <= 0 then return nil, nil end
+        return x, y
+    end
+
+    local function _poll_metrics()
+        local changed = false
+        local function update(key, value)
+            if value and math.abs(value - metrics[key]) > 0.5 then
+                metrics[key] = value
+                changed = true
+            end
+        end
+
+        local _, text_h = _read_size(probe_text)
+        update("text_h", text_h)
+        local _, frame_h = _read_size(probe_frame)
+        update("frame_h", frame_h)
+        local edit_w = _read_size(probe_edit)
+        update("edit_w", edit_w)
+
+        if settings_button_window.Visible then
+            local bar_w, bar_h = _read_size(settings_button_window)
+            update("topbar_w", bar_w)
+            update("topbar_h", bar_h)
+        end
+
+        if changed then _update_windows() end
+    end
+
     Ext.Events.Tick:Subscribe(function(_)
+        _poll_metrics()
+
         _sync_ui_hidden_from_root()
+
+        if Dice_api then
+            Dice_api.tick(Ext.Utils.MonotonicTime(), in_game and dice_visible and (not game_ui_hidden))
+        end
 
         if move_mode then
             _sync_from_native_drag()
@@ -1092,7 +1333,7 @@ local ok_init, err = pcall(function()
         end
 
         local someoneElseTyping = next(typing_users) ~= nil
-        if in_game and chat_enabled and not game_ui_hidden and not settings_visible and not someoneElseTyping and auto_hide_enabled then
+        if in_game and chat_enabled and not game_ui_hidden and not settings_visible and not dice_visible and not someoneElseTyping and auto_hide_enabled then
             local idle_seconds = (Ext.Utils.MonotonicTime() - last_activity_ms) / 1000.0
             local input_empty = (input.Text == nil or input.Text == "")
             local should_hide = (not input_active) and input_empty and (idle_seconds > auto_hide_delay)
@@ -1113,7 +1354,7 @@ local ok_init, err = pcall(function()
         if listening_for_open_key then
             listening_for_open_key = false
             open_key = keyName
-            open_key_button.Label = "Current: " .. open_key
+            open_key_button.Label = _open_key_label()
             _save_window_settings()
             return
         end
@@ -1145,16 +1386,21 @@ local ok_init, err = pcall(function()
                 my_last_message = { id = data.id, text = data.body }
             end
         elseif data.t == "system" then
-            _add_chat_entry(nil, nil, data.body, "system")
+            if data.key then
+                _add_chat_entry(nil, nil, nil, "system", { key = data.key, arg = data.name })
+            else
+                _add_chat_entry(nil, nil, data.body, "system")
+            end
+        elseif data.t == "roll" then
+            _add_chat_entry(nil, nil, nil, "system", { roll = data })
+        elseif data.t == "who" then
+            if Dice_api then Dice_api.set_character(data.name) end
         elseif data.t == "ack" then
-
             my_last_message = { id = data.id, text = data.body }
         elseif data.t == "typing" then
-
             if typing_notifications_enabled and data.name and data.name ~= "" then
                 if data.on then
                     if typing_users[data.name] == nil then
-
                         chat_enabled = true
                         _touch_activity()
                         _apply_visibility()
@@ -1163,15 +1409,15 @@ local ok_init, err = pcall(function()
                 else
                     typing_users[data.name] = nil
                     if next(typing_users) == nil then
-
                         _touch_activity()
                     end
                 end
                 _update_status_line()
             end
         elseif data.t == "oht" then
-
-            local text = overhead_text_enabled and (data.body or "") or " "
+            local body = data.body or ""
+            if type(data.roll) == "table" then body = Dice_api.format_overhead(data.roll) end
+            local text = overhead_text_enabled and body or " "
             if text == "" then text = " " end
             pcall(function() Ext.Loca.UpdateTranslatedString(MSG_BUFFER_HANDLE, text) end)
         end
@@ -1200,6 +1446,9 @@ local ok_init, err = pcall(function()
         if CHAT_FORMAT_BUILDERS[settings.ChatFormat] then chat_format = settings.ChatFormat end
         open_key = tostring(settings.OpenKey or CFG.DefaultOpenKey):upper()
 
+        Lang.Set(settings.Language)
+        language_combo.SelectedIndex = (Lang.IndexOf(Lang.Current) or 1) - 1
+
         if settings.AutoHideEnabled ~= nil then auto_hide_enabled = settings.AutoHideEnabled end
         auto_hide_delay = tonumber(settings.AutoHideDelaySeconds) or auto_hide_delay
         if settings.TypingNotificationsEnabled ~= nil then typing_notifications_enabled = settings.TypingNotificationsEnabled end
@@ -1214,9 +1463,9 @@ local ok_init, err = pcall(function()
         overhead_text_checkbox.Checked = overhead_text_enabled
         auto_hide_checkbox.Checked = auto_hide_enabled
         typing_notif_checkbox.Checked = typing_notifications_enabled
-        open_key_button.Label = "Current: " .. open_key
+        open_key_button.Label = _open_key_label()
 
-        _apply_move_mode()
+        _apply_language()
 
         last_root_visible = nil
         _sync_ui_hidden_from_root()
@@ -1227,7 +1476,7 @@ local ok_init, err = pcall(function()
         if not initial_hint_shown then
             initial_hint_shown = true
             if show_hint_message then
-                _add_chat_entry(nil, nil, CONFIG.DefaultGreeting, "system")
+                _add_chat_entry(nil, nil, nil, "system", { key = "chat.hint", nolog = true })
             end
         end
 
@@ -1244,7 +1493,8 @@ local ok_init, err = pcall(function()
             if settings_loaded then _save_window_settings() end
 
             settings_visible = false
-            pcall(function() settings_button:SetColor("Button", MENU_BUTTON_COLOR_CLOSED) end)
+            dice_visible = false
+            _refresh_menu_button_colors()
             listening_for_open_key = false
             input_active = false
             game_ui_hidden = true

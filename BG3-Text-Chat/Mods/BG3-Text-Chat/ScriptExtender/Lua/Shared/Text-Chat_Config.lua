@@ -1,7 +1,8 @@
 local Text_Chat_Config = {
-
     InputFirstLineHeightPx = 32,
-    InputExtraLineHeightPx = 28,
+    InputExtraLineHeightPx = 18,
+
+    DefaultLanguage = "en",
 
     DefaultWindowXPos = 150,
     DefaultWindowYPos = 750,
@@ -39,8 +40,6 @@ local Text_Chat_Config = {
     NameColor = {1.0, 1.0, 1.0, 1.0},
 
     TypingIndicatorColor = {0.75, 0.75, 0.75, 1.0},
-
-    EditedSuffix = "(edited)",
 
     EditedColor = {0.45, 0.45, 0.45, 1.0},
 

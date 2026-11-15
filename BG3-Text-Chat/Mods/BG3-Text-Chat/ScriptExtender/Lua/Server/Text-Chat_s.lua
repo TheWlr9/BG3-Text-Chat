@@ -69,17 +69,18 @@ end
 
 local function on_user_connected(userID, userName, userSomethingElse)
     connected_users[userID - 1] = true
-    _broadcast({ t = "system", body = "~ " .. tostring(userName) .. " joined the chat ~" })
+
+    _broadcast({ t = "system", key = "chat.joined", name = tostring(userName) })
 end
 
 local function on_user_disconnected(userID, userName, userSomethingElse)
     connected_users[userID - 1] = nil
-    _broadcast({ t = "system", body = "~ " .. tostring(userName) .. " left the chat ~" })
+    _broadcast({ t = "system", key = "chat.left", name = tostring(userName) })
 end
 
-local function _apply_overhead_text(character, body)
+local function _apply_overhead_text(character, body, roll)
     if not character then return end
-    _broadcast({ t = "oht", body = tostring(body) })
+    _broadcast({ t = "oht", body = tostring(body or ""), roll = roll })
     Ext.Timer.WaitForRealtime(200, function()
         local ok = pcall(function() Osi.ApplyStatus(character, "TEXT_MESSAGE", 0) end)
     end)
@@ -113,12 +114,30 @@ local function _handle_edit_message(event, data)
 
     last.body = body
     _broadcast({ t = "edit", id = id, body = body })
-
 end
 
 local function _handle_typing(event, data)
     local display_name = resolve_display_name_and_character(event.UserID)
     _broadcast_except(event.UserID, { t = "typing", name = display_name, on = data.on and true or false })
+end
+
+local function _handle_roll(event, data)
+    local display_name, character = resolve_display_name_and_character(event.UserID)
+    if not character then return end
+
+    local result = TC_Dice.Roll(character, data)
+    if not result then return end
+
+    result.t = "roll"
+    result.name = display_name
+    _broadcast(result)
+
+    _apply_overhead_text(character, nil, result)
+end
+
+local function _handle_who(event)
+    local display_name, character = resolve_display_name_and_character(event.UserID)
+    _unicast(event.UserID, { t = "who", name = character and display_name or "" })
 end
 
 local function received_message(event)
@@ -135,6 +154,10 @@ local function received_message(event)
         _handle_edit_message(event, data)
     elseif data.t == "typing" then
         _handle_typing(event, data)
+    elseif data.t == "roll" then
+        _handle_roll(event, data)
+    elseif data.t == "who" then
+        _handle_who(event)
     end
 end
 

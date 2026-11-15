@@ -4,6 +4,7 @@ local WINDOW_SETTINGS_PATH = "Data/Text-Chat_Window-Settings.json"
 MSG_BUFFER_HANDLE = "h7961f8f8g2753g4885gb843gbad96a0098d7"
 
 local CFG = Ext.Require("Shared/Text-Chat_Config.lua")
+local Lang = Ext.Require("Shared/Text-Chat_Lang.lua")
 
 local BASELINE_GAME_WINDOW_WIDTH = 1920
 
@@ -31,6 +32,11 @@ end
 
 local function _safe_chat_format(v, default)
     if v == "classic" or v == "modern" or v == "discord" or v == "roleplayer" then return v end
+    return default
+end
+
+local function _safe_language(v, default)
+    if type(v) == "string" and Lang.Strings[v] then return v end
     return default
 end
 
@@ -86,6 +92,8 @@ function TC_SaveWindowSettings(save_data)
 
         TypingNotificationsEnabled = _safe_bool(save_data.TypingNotificationsEnabled, CFG.DefaultTypingNotificationsEnabled),
         OverheadTextEnabled = _safe_bool(save_data.OverheadTextEnabled, CFG.DefaultOverheadTextEnabled),
+
+        Language = _safe_language(save_data.Language, CFG.DefaultLanguage),
     }
 
     Ext.IO.SaveFile(WINDOW_SETTINGS_PATH, Ext.Json.Stringify(cached_settings))
@@ -119,6 +127,8 @@ function TC_LoadWindowSettings()
     save_data.TypingNotificationsEnabled = _safe_bool(save_data.TypingNotificationsEnabled, CFG.DefaultTypingNotificationsEnabled)
     save_data.OverheadTextEnabled = _safe_bool(save_data.OverheadTextEnabled, CFG.DefaultOverheadTextEnabled)
 
+    save_data.Language = _safe_language(save_data.Language, CFG.DefaultLanguage)
+
     return save_data
 end
 
@@ -142,6 +152,23 @@ end
 
 function TC_SendTyping(isTyping)
     _post({ t = "typing", on = isTyping and true or false })
+end
+
+function TC_SendRoll(kind, id, mode, dc)
+    if not kind or not id then return end
+    _post({ t = "roll", kind = kind, id = id, mode = mode or "normal", dc = dc })
+end
+
+function TC_SendWho()
+    _post({ t = "who" })
+end
+
+function TC_GenerateLogFile(lines)
+    local stamp = tostring(Ext.Timer.ClockTime()):gsub("[ %.:]", "-")
+    local path = "Data/Logs/Text-Chat_Log_" .. stamp .. ".log"
+    local ok, saved = pcall(function() return Ext.IO.SaveFile(path, table.concat(lines or {}, "\r\n")) end)
+    if ok and saved ~= false then return path end
+    return nil
 end
 
 function TC_ParseEmoteSegments(text)
