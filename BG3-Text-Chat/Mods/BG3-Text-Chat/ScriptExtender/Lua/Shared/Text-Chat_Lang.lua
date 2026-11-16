@@ -25,7 +25,6 @@ end
 
 local Lang = {}
 
--- Name shown in the language drop-down (written in the language itself).
 Lang.Languages = {
     { code = "en", name = "English" },
     { code = "fr", name = "Français" },
@@ -41,7 +40,8 @@ Lang.Strings = {
         ["top.clear"] = "Clear",
         ["top.close"] = "Close",
 
-        ["input.edit"] = "Edit",
+        ["input.edit"]   = "Edit",
+        ["input.cancel"] = "Cancel",
 
         ["status.typing"]  = "%s is typing...",
         ["status.several"] = "Several people are typing...",
@@ -146,7 +146,8 @@ Lang.Strings = {
         ["top.clear"] = "Effacer",
         ["top.close"] = "Fermer",
 
-        ["input.edit"] = "Modifier",
+        ["input.edit"]   = "Modifier",
+        ["input.cancel"] = "Annuler",
 
         ["status.typing"]  = "%s écrit...",
         ["status.several"] = "Plusieurs personnes écrivent...",

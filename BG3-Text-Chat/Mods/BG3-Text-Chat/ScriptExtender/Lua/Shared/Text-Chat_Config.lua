@@ -75,11 +75,8 @@ local Text_Chat_Config = {
         { id = "Survival" },
     },
 
-    -- "active" = RequestActiveRoll (dice window), "passive" = RequestPassiveRoll (overhead popup)
     DiceRollTypes = { "active", "passive" },
 
-    -- DC tiers. Each tier is a DifficultyClass resource (UUID) created by the mod at session load,
-    -- with a single fixed value in Difficulties. The UUIDs must never change.
     DiceDifficultyTiers = {
         { id = "VeryEasy",         dc = 5,  uuid = "038475dc-e674-47d3-92f6-d10cb8cb8179" },
         { id = "Easy",             dc = 10, uuid = "e3e5d485-2f94-4e8f-b60b-6c1f1e3afe24" },
@@ -116,11 +113,6 @@ local function _single_difficulty(res)
     return nil
 end
 
--- Makes sure every DC tier points to a DifficultyClass the engine knows.
--- 1. Our own resource (created here with the tier UUID), so other mods that rebalance
---    the vanilla DCs can't change our values.
--- 2. If creating fails, a vanilla DifficultyClass with the same single value.
--- Must run on both server and client (the active roll window reads the DC on the client).
 function Text_Chat_Config.ResolveDiceDifficultyClasses()
     if not (Ext.StaticData and Ext.StaticData.Get) then return end
 

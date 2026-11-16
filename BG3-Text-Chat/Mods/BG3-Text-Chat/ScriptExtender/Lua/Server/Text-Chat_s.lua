@@ -182,8 +182,6 @@ local function _handle_roll(event, data)
     end)
 end
 
--- resultType: 0 = failure, 1 = success, 2 = cancelled (active rolls only)
--- criticality: 0 = none, 1 = critical success, 2 = critical failure
 local function _on_roll_result(event_name, roller, roll_subject, result_type, is_active_roll, criticality)
     local p = pending_rolls[event_name]
     if not p then return end
@@ -202,7 +200,6 @@ local function _on_roll_result(event_name, roller, roll_subject, result_type, is
     }
     _broadcast(msg)
 
-    -- Passive rolls already get the game's own overhead popup.
     if p.active and msg.result ~= 2 then
         _apply_overhead_text(p.character, nil, msg)
     end

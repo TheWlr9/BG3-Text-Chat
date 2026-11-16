@@ -305,9 +305,13 @@ local ok_init, err = pcall(function()
 
     local EDIT_BUTTON_GAP = 12
 
-    local edit_button = input_parent:AddButton(T("input.edit"))
+    local function _edit_button_label()
+        return T(editing_message_id ~= nil and "input.cancel" or "input.edit")
+    end
+
+    local edit_button = input_parent:AddButton(_edit_button_label())
     edit_button.SameLine = true
-    _bind(edit_button, "input.edit")
+    _bind(edit_button, _edit_button_label)
 
     local function _grant_real_focus()
         input.Label = "###Input" .. tostring(Ext.Utils.MonotonicTime())
@@ -368,7 +372,14 @@ local ok_init, err = pcall(function()
     local probe_frame = _new_probe("Text-Chat_ProbeFrame")
     probe_frame:AddButton("Ag")
     local probe_edit = _new_probe("Text-Chat_ProbeEdit")
-    _bind(probe_edit:AddButton(T("input.edit")), "input.edit")
+    local probe_edit_button = _bind(probe_edit:AddButton(_edit_button_label()), _edit_button_label)
+
+    local function _set_editing(id)
+        editing_message_id = id
+        local label = _edit_button_label()
+        edit_button.Label = label
+        probe_edit_button.Label = label
+    end
 
     local MENU_BUTTON_COLOR_CLOSED = {0.3, 0.18, 0.09, 1.0}
 
@@ -679,22 +690,33 @@ local ok_init, err = pcall(function()
         return changed
     end
 
+    local function _cancel_edit(refocus)
+        if editing_message_id == nil then return end
+        _set_editing(nil)
+
+        local restored = cached_draft_text or ""
+        cached_draft_text = nil
+
+        suppress_next_change = true
+        input.Text = restored
+        last_seen_input_text = restored
+        Ext.Timer.WaitFor(1, function() suppress_next_change = false end)
+        _update_dynamic_input_size(restored)
+
+        if last_typing_state_sent then
+            TC_SendTyping(false)
+            last_typing_state_sent = false
+        end
+        _update_status_line()
+        _touch_activity()
+
+        if refocus then _grant_real_focus() end
+    end
+
     _submit_input = function()
         local text = input.Text or ""
         if text == "" then
-            if editing_message_id ~= nil then
-                editing_message_id = nil
-                if cached_draft_text then
-                    local restored = cached_draft_text
-                    cached_draft_text = nil
-                    suppress_next_change = true
-                    input.Text = restored
-                    last_seen_input_text = restored
-                    Ext.Timer.WaitFor(1, function() suppress_next_change = false end)
-                    _update_dynamic_input_size(restored)
-                end
-                _update_status_line()
-            end
+            _cancel_edit(false)
             return
         end
 
@@ -705,9 +727,14 @@ local ok_init, err = pcall(function()
         sendText = sendText:gsub("^%s+", ""):gsub("%s+$", "")
         if sendText == "" then return end
 
+        if editing_message_id ~= nil and my_last_message and sendText == my_last_message.text then
+            _cancel_edit(false)
+            return
+        end
+
         if editing_message_id ~= nil then
             TC_SendEdit(editing_message_id, sendText)
-            editing_message_id = nil
+            _set_editing(nil)
         else
             TC_SendMessage(sendText)
         end
@@ -747,7 +774,7 @@ local ok_init, err = pcall(function()
             cached_draft_text = currentText
         end
 
-        editing_message_id = my_last_message.id
+        _set_editing(my_last_message.id)
         local targetText = my_last_message.text
 
         suppress_next_change = true
@@ -1159,7 +1186,13 @@ local ok_init, err = pcall(function()
         end
     end)
 
-    edit_button.OnClick = _with_send_suppressed(function() _begin_edit_last_message(true) end)
+    edit_button.OnClick = _with_send_suppressed(function()
+        if editing_message_id ~= nil then
+            _cancel_edit(true)
+        else
+            _begin_edit_last_message(true)
+        end
+    end)
     open_key_button.OnClick = _with_send_suppressed(function()
         listening_for_open_key = true
         open_key_button.Label = _open_key_label()
@@ -1585,7 +1618,7 @@ local ok_init, err = pcall(function()
             listening_for_open_key = false
             input_active = false
             game_ui_hidden = true
-            editing_message_id = nil
+            _set_editing(nil)
             cached_draft_text = nil
             typing_users = {}
             _apply_visibility()
