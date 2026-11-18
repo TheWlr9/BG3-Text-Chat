@@ -42,6 +42,7 @@ local Text_Chat_Config = {
     TypingIndicatorColor = {0.75, 0.75, 0.75, 1.0},
 
     EditedColor = {0.45, 0.45, 0.45, 1.0},
+    OocColor = {0.45, 0.45, 0.45, 1.0},
 
     MaxKeptMessages = 300,
 

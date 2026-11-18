@@ -236,27 +236,41 @@ function TC_GenerateLogFile(lines)
     return nil
 end
 
-function TC_ParseEmoteSegments(text)
+function TC_ParseFormatSegments(text)
     text = text or ""
     local segments = {}
     local pos = 1
     local len = #text
 
+    local function _push(part, kind)
+        part = part:gsub("^%s+", ""):gsub("%s+$", "")
+        if part ~= "" then table.insert(segments, { text = part, kind = kind }) end
+    end
+
     while pos <= len do
-        local s, e, inner = text:find("%*([^*]+)%*", pos)
+        local es, ee = text:find("%*[^*]+%*", pos)
+        local os, oe = text:find("%b()", pos)
+
+        local s, e, kind
+        if es and (not os or es < os) then
+            s, e, kind = es, ee, "emote"
+        elseif os then
+            s, e, kind = os, oe, "ooc"
+        end
+
         if not s then
-            table.insert(segments, { text = text:sub(pos), emote = false })
+            _push(text:sub(pos), "text")
             break
         end
         if s > pos then
-            table.insert(segments, { text = text:sub(pos, s - 1), emote = false })
+            _push(text:sub(pos, s - 1), "text")
         end
-        table.insert(segments, { text = "*" .. inner .. "*", emote = true })
+        _push(text:sub(s, e), kind)
         pos = e + 1
     end
 
     if #segments == 0 then
-        table.insert(segments, { text = "", emote = false })
+        table.insert(segments, { text = "", kind = "text" })
     end
 
     return segments

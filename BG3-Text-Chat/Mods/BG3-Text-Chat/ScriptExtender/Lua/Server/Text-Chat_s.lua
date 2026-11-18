@@ -88,6 +88,10 @@ local function _apply_overhead_text(character, body, roll)
     end)
 end
 
+local function _strip_ooc(body)
+    return (body:gsub("%b()", ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
 local function _handle_new_message(event, data)
     local body = data.body
     if type(body) ~= "string" or body == "" then return end
@@ -100,7 +104,10 @@ local function _handle_new_message(event, data)
 
     last_message_by_user[event.UserID] = { id = id, body = body, name = display_name }
 
-    _apply_overhead_text(character, body)
+    local overhead_body = _strip_ooc(body)
+    if overhead_body ~= "" then
+        _apply_overhead_text(character, overhead_body)
+    end
 
     IteratePlayerCharacters(MSG_RECEIVED_EVENT, "")
 end

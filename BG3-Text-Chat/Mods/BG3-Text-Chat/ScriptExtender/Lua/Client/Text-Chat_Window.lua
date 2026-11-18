@@ -955,15 +955,18 @@ local ok_init, err = pcall(function()
             _addHeaderParts(builder(tostring(rec.name), rec.timestampText, show_timestamps))
         end
 
-        local hasEmote = body:find("%*[^*]+%*") ~= nil
+        local hasFormat = body:find("%*[^*]+%*") ~= nil or body:find("%b()") ~= nil
 
-        if not hasEmote then
+        if not hasFormat then
             _addLine(body, nil, false)
         else
-
-            for _, seg in ipairs(TC_ParseEmoteSegments(body)) do
-                if seg.emote or seg.text:match("%S") then
-                    _addLine(seg.text, seg.emote and CFG.EmoteColor or nil, seg.emote)
+            for _, seg in ipairs(TC_ParseFormatSegments(body)) do
+                if seg.kind == "emote" then
+                    _addLine(seg.text, CFG.EmoteColor, true)
+                elseif seg.kind == "ooc" then
+                    _addLine(seg.text, CFG.OocColor, false)
+                else
+                    _addLine(seg.text, nil, false)
                 end
             end
         end
@@ -1223,7 +1226,14 @@ local ok_init, err = pcall(function()
         text_parent.Visible = show_chat
         input_parent.Visible = show_chat
         settings_button_window.Visible = show_chat
-        move_mode_frame.Visible = show_chat and move_mode
+        local show_move_frame = show_chat and move_mode
+        local move_frame_appears = show_move_frame and not move_mode_frame.Visible
+        move_mode_frame.Visible = show_move_frame
+        if move_frame_appears then
+            Ext.Timer.WaitFor(1, function()
+                if move_mode_frame.Visible then pcall(function() move_mode_frame:SetFocus() end) end
+            end)
+        end
 
         settings_panel.Visible = in_game and settings_visible and (not game_ui_hidden)
         dice_panel.Visible = in_game and dice_visible and (not game_ui_hidden)
