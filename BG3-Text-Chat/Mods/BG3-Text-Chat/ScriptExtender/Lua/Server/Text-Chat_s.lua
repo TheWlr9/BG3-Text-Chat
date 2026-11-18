@@ -162,6 +162,7 @@ local function _handle_roll(event, data)
         dc = tier.dc,
         adv = advantage == 1,
         active = roll_type == "active",
+        hidden = data.hidden == true,
     }
 
     local ok, err = pcall(function()
@@ -186,6 +187,8 @@ local function _on_roll_result(event_name, roller, roll_subject, result_type, is
     local p = pending_rolls[event_name]
     if not p then return end
     pending_rolls[event_name] = nil
+
+    if p.hidden then return end
 
     local msg = {
         t = "roll",

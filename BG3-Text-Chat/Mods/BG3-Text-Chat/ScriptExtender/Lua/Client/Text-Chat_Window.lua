@@ -552,6 +552,7 @@ local ok_init, err = pcall(function()
     _full_width(dice_type_combo)
 
     local dice_adv_checkbox = _bind(dice_panel:AddCheckbox(T("dice.advantageOption"), false), "dice.advantageOption")
+    local dice_hidden_checkbox = _bind(dice_panel:AddCheckbox(T("dice.hiddenOption"), false), "dice.hiddenOption")
 
     _add_text(dice_panel, "dice.dc")
     local dice_dc_combo = dice_panel:AddCombo("##dice_dc")
@@ -1145,7 +1146,7 @@ local ok_init, err = pcall(function()
         _touch_activity()
         local tier = CFG.DiceDifficultyTiers[dice_dc_combo.SelectedIndex + 1]
         if not tier then return end
-        TC_SendRoll(kind, def.id, CFG.DiceRollTypes[dice_type_combo.SelectedIndex + 1], tier.id, dice_adv_checkbox.Checked)
+        TC_SendRoll(kind, def.id, CFG.DiceRollTypes[dice_type_combo.SelectedIndex + 1], tier.id, dice_adv_checkbox.Checked, dice_hidden_checkbox.Checked)
     end
 
     dice_ability_button.OnClick = _with_send_suppressed(function()
@@ -1159,6 +1160,7 @@ local ok_init, err = pcall(function()
     local function _on_dice_widget_change() _touch_activity() end
     dice_type_combo.OnChange = _on_dice_widget_change
     dice_adv_checkbox.OnChange = _on_dice_widget_change
+    dice_hidden_checkbox.OnChange = _on_dice_widget_change
     dice_dc_combo.OnChange = _on_dice_widget_change
     dice_ability_combo.OnChange = _on_dice_widget_change
     dice_skill_combo.OnChange = _on_dice_widget_change

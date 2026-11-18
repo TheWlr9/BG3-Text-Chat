@@ -154,9 +154,13 @@ function TC_SendTyping(isTyping)
     _post({ t = "typing", on = isTyping and true or false })
 end
 
-function TC_SendRoll(kind, id, roll_type, tier, advantage)
+function TC_SendRoll(kind, id, roll_type, tier, advantage, hidden)
     if not kind or not id or not tier then return end
-    _post({ t = "roll", kind = kind, id = id, rollType = roll_type or "active", tier = tier, adv = advantage and true or false })
+    _post({
+        t = "roll", kind = kind, id = id, rollType = roll_type or "active", tier = tier,
+        adv = advantage and true or false,
+        hidden = hidden and true or false,
+    })
 end
 
 function TC_SendWho()
